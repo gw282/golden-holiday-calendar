@@ -46,7 +46,17 @@ const TOOL_LABEL: Record<string, string> = {
 
 const TOOL_FALLBACK = "확인하는 중";
 
-export default function OmniSearch({ offline = false }: { offline?: boolean }) {
+export default function OmniSearch({
+  offline = false,
+  chat = true,
+}: {
+  offline?: boolean;
+  /** 챗봇을 쓸 수 있나. 배포본에서는 꺼 둔다 — `lib/settings.ts`의 isChatEnabled 참고 */
+  chat?: boolean;
+}) {
+  /* 오프라인이면 밖으로 못 나가고, 꺼 뒀으면 서버에 붙을 것 자체가 없다. 둘 다 결과는 같다 */
+  const canChat = chat && !offline;
+
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const logEnd = useRef<HTMLDivElement>(null);
@@ -109,7 +119,7 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
 
   /** 팝업 안에서 한 번 더 눌러야 도는 쪽. 같은 말을 그대로 챗봇에게 넘긴다 */
   async function ask(message: string) {
-    if (!message || busy || offline) return;
+    if (!message || busy || !canChat) return;
 
     setError(null);
     setBusy(true);
@@ -193,7 +203,7 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
           id={SEARCH_INPUT_ID}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={offline ? "일정 찾기 (키워드)" : "일정 찾기 · 물어보기(챗봇)"}
+          placeholder={canChat ? "일정 찾기 · 물어보기(챗봇)" : "일정 찾기 (키워드)"}
           aria-label="일정 찾기"
           className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted"
         />
@@ -257,9 +267,10 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto">
-          {/* 챗봇 — **외부망에서만.** 내부망에서는 이 자리 자체가 없다.
-              누를 수 없는 단추를 회색으로 남겨 두면 "왜 안 되지"를 매번 묻게 된다 */}
-          {!offline && turns.length > 0 && (
+          {/* 챗봇 — **켜져 있고 외부망일 때만.** 내부망이거나 배포본처럼 꺼 뒀으면
+              이 자리 자체가 없다. 누를 수 없는 단추를 회색으로 남겨 두면
+              "왜 안 되지"를 매번 묻게 된다 */}
+          {canChat && turns.length > 0 && (
             <div className="border-b border-border px-4 py-2.5">
               {(
                 <div className="space-y-3 text-xs">
@@ -313,9 +324,9 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
             스크롤 영역 **밖**이라 결과가 길어져도 자리를 지킨다 — 안에 두면 아래로 밀려
             찾으려면 끝까지 내려야 한다.
 
-            오프라인에서는 이 줄 자체가 없다. 누를 수 없는 단추를 회색으로 남겨 두면
-            "왜 안 되지"를 매번 묻게 된다. */}
-        {!offline && turns.length === 0 && (
+            챗봇이 없을 때는(오프라인이거나 배포본처럼 꺼 뒀을 때) 이 줄 자체가 없다.
+            누를 수 없는 단추를 회색으로 남겨 두면 "왜 안 되지"를 매번 묻게 된다. */}
+        {canChat && turns.length === 0 && (
           <div className="flex justify-end border-t border-border px-4 py-2">
             <button
               type="button"

@@ -1,0 +1,57 @@
+# 황금연휴 캘린더 — Fly.io 배포 설정
+#
+# ⚠️ 가장 중요한 제약: **머신은 반드시 하나여야 한다.**
+# DB가 SQLite 파일 하나(`/app/data/app.db`)이고 볼륨은 머신 하나에만 붙는다.
+# 머신을 둘로 늘리면 DB도 둘로 갈라져서, 요청이 어느 쪽으로 가느냐에 따라 다른 일정이
+# 보인다. 그래서 첫 배포는 `fly deploy --ha=false`로 한다 (안 그러면 Fly가 기본으로
+# 두 대를 만든다). 늘리고 싶으면 SQLite를 먼저 갈아야 한다.
+
+app = "golden-holiday-calendar"
+
+# 볼륨은 리전에 묶인다 — 머신과 볼륨이 같은 리전이어야 한다.
+# 도쿄. 다른 데로 옮기려면 `fly platform regions`로 목록을 보고 볼륨부터 다시 만든다.
+primary_region = "nrt"
+
+[build]
+  [build.args]
+    # 챗봇 없이 굽는다. 담으려면 fly deploy --build-arg WITH_CHAT=1
+    # (자세한 이유는 Dockerfile 주석)
+    WITH_CHAT = "0"
+
+[env]
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+
+  # 안 쓸 때는 세워 둔다. 개인용이라 하루 대부분이 유휴인데 그 시간에 돈을 낼 이유가 없다.
+  # 볼륨이 붙은 그 머신이 그대로 다시 뜨므로 DB는 남는다.
+  # 대신 첫 요청이 1~2초 늦다 (Next 부팅).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # 머신을 늘리지 않는다. 위의 ⚠️ 와 같은 이유다.
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 100
+
+# ⚠️ 헬스체크를 붙이지 않았다. APP_PASSWORD를 켜면 `/`가 **401**을 돌려주므로,
+# 평범한 200 기대 체크를 달면 머신이 계속 unhealthy로 잡혀 재시작 루프에 빠진다.
+# 꼭 붙이려면 체크에도 Authorization 헤더를 실어 줘야 한다.
+
+[mounts]
+  source = "data"
+  destination = "/app/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  # 챗봇을 빼서 512MB로 충분하다. WITH_CHAT=1로 담을 거면 1024로 올릴 것 —
+  # Claude Code가 자식 프로세스로 뜨느라 이 정도로는 부족하다.
+  memory = "512mb"
+
+# 512MB에서 빌드 없이 서버만 도는 데는 여유가 있지만, 스파이크에 OOM으로 죽는 것보다
+# 잠깐 느린 편이 낫다.
+swap_size_mb = 512

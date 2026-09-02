@@ -9,7 +9,7 @@
  * 여기서 SQL을 다시 쓰면 규칙이 두 군데로 갈라진다.
  *
  * `lib/events.ts` 를 import 하므로 이 파일은 **서버 전용**이다.
- * 클라이언트 컴포넌트에서 import 하면 `node:sqlite` 가 번들로 끌려와 빌드가 깨진다.
+ * 클라이언트 컴포넌트에서 import 하면 `@libsql/client` 가 번들로 끌려와 빌드가 깨진다.
  */
 
 import { createSdkMcpServer, tool } from "@anthropic-ai/claude-agent-sdk";
@@ -71,7 +71,7 @@ const listEventsTool = tool(
     if (!isValidDateStr(to)) return badDate("to", to);
     if (to < from) return text(`to(${to})가 from(${from})보다 빠릅니다.`);
 
-    const events = listEventsBetween(from, to);
+    const events = await listEventsBetween(from, to);
     if (events.length === 0) return text(`${from} ~ ${to} 사이에 일정이 없습니다.`);
 
     return text(`${from} ~ ${to} · ${events.length}건\n` + events.map(line).join("\n"));
@@ -85,7 +85,7 @@ const searchEventsTool = tool(
     "색·공휴일·준비물은 검색 대상이 아니다. 최근 순 30건까지만 온다.",
   { query: z.string().describe("찾을 말. 부분 일치, 대소문자 무관") },
   async ({ query }) => {
-    const { events, hasMore } = searchEvents(query);
+    const { events, hasMore } = await searchEvents(query);
     if (events.length === 0) return text(`'${query}'로 찾은 일정이 없습니다.`);
 
     // 잘렸으면 반드시 알린다. 안 알리면 모델이 30건을 전부라고 믿고
@@ -110,7 +110,7 @@ const listHolidaysTool = tool(
     if (!isValidDateStr(from)) return badDate("from", from);
     if (!isValidDateStr(to)) return badDate("to", to);
 
-    const holidays = listHolidays(from, to);
+    const holidays = await listHolidays(from, to);
     if (holidays.length === 0) return text(`${from} ~ ${to} 사이에 공휴일이 없습니다.`);
 
     return text(holidays.map((h) => `${h.date} ${h.name}`).join("\n"));
@@ -123,7 +123,7 @@ const leaveBalanceTool = tool(
   "휴가 종류별 잔고. 쓴 일수는 기간에서 주말과 공휴일을 뺀 값으로 자동 집계된 것이다.",
   {},
   async () => {
-    const summaries = leaveSummaries();
+    const summaries = await leaveSummaries();
     if (summaries.length === 0) return text("등록된 휴가 종류가 없습니다.");
 
     return text(
@@ -158,7 +158,7 @@ const createEventTool = tool(
     if (input.endDate && !isValidDateStr(input.endDate)) return badDate("endDate", input.endDate);
 
     try {
-      const event = createEvent({
+      const event = await createEvent({
         title: input.title,
         date: input.date,
         endDate: input.endDate ?? null,

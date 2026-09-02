@@ -8,7 +8,7 @@ import { eachDay, isValidDateStr, isWeekend } from "@/lib/date";
  *
  * 서버(`lib/leave.ts`)와 같은 규칙으로 센다 — 기간에서 주말과 공휴일을 뺀다.
  * 규칙이 두 군데에 있는 이유: 잔고 합산은 서버가, 팝업·목록의 미리보기는 클라이언트가 해야 하는데
- * `lib/leave.ts`를 클라이언트에서 import하면 node:sqlite가 번들로 끌려온다.
+ * `lib/leave.ts`를 클라이언트에서 import하면 @libsql/client가 번들로 끌려온다.
  * **한쪽을 고치면 다른 쪽도 같이 고칠 것.**
  */
 
@@ -65,7 +65,7 @@ export function fmtDays(n: number): string {
  * 일정 팝업이 고를 수 있는 휴가 종류.
  *
  * 서버(`lib/leave.ts`)의 `LeaveType` 전부가 아니라 **고르는 데 필요한 것만** 담는다 —
- * 팝업은 클라이언트 컴포넌트라 lib/leave를 import하면 node:sqlite가 번들로 끌려온다.
+ * 팝업은 클라이언트 컴포넌트라 lib/leave를 import하면 @libsql/client가 번들로 끌려온다.
  */
 export type LeaveTypeOption = {
   id: number;

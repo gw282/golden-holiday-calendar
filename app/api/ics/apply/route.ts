@@ -22,17 +22,17 @@ export async function POST(request: Request) {
       : {};
 
   try {
-    return NextResponse.json(applyIcs(body.ics, overrides));
+    return NextResponse.json(await applyIcs(body.ics, overrides));
   } catch (e) {
     if (e instanceof ImportError) return NextResponse.json({ error: e.message }, { status: 400 });
     throw e;
   }
 }
 
-export function DELETE(request: Request) {
+export async function DELETE(request: Request) {
   const id = Number(new URL(request.url).searchParams.get("batch"));
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: "되돌릴 묶음 번호가 없습니다." }, { status: 400 });
   }
-  return NextResponse.json({ removed: undoBatch(id) });
+  return NextResponse.json({ removed: await undoBatch(id) });
 }

@@ -20,7 +20,7 @@ const params = new URL(request.url).searchParams;
   const q = params.get("q");
   // searchEvents가 이미 { events, hasMore } 모양이라 그대로 넘긴다.
   // events 키는 다른 분기와 같아서 기존 소비자가 깨지지 않는다.
-  if (q !== null) return NextResponse.json(searchEvents(q));
+  if (q !== null) return NextResponse.json(await searchEvents(q));
 
   const date = params.get("date");
 
@@ -28,10 +28,10 @@ const params = new URL(request.url).searchParams;
     if (!isValidDateStr(date)) {
       return NextResponse.json({ error: "date는 'YYYY-MM-DD' 형식이어야 합니다." }, { status: 400 });
     }
-    return NextResponse.json({ events: listEventsByDate(date) });
+    return NextResponse.json({ events: await listEventsByDate(date) });
   }
 
-  return NextResponse.json({ events: listEvents() });
+  return NextResponse.json({ events: await listEvents() });
 }
 
 /** POST /api/events — 일정 추가 */
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       title, date, endDate, startTime, endTime, memo, color, repeat,
       isLeave, leaveTypeId, leaveDays,
     } = (body ?? {}) as Record<string, unknown>;
-    const event = createEvent({
+    const event = await createEvent({
       title: title as string,
       date: date as string,
       endDate: endDate as string | null | undefined,

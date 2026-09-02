@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { get, run } from "./db";
 
 /**
  * 앱 설정 — 지금은 **오프라인 모드** 하나뿐이다.
@@ -13,10 +13,10 @@ import { getDb } from "./db";
  */
 
 /** 오프라인 모드인가 */
-export function isOffline(): boolean {
-  const row = getDb().prepare(`SELECT value FROM app_settings WHERE key = 'offline'`).get() as
-    | { value: string }
-    | undefined;
+export async function isOffline(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'offline'`,
+  );
 
   // 아직 아무도 손대지 않았으면 환경변수가 기본값을 정한다.
   // 오프라인용 빌드는 OFFLINE_DEFAULT=1로 띄우면 처음부터 꺼진 채로 시작한다.
@@ -24,11 +24,26 @@ export function isOffline(): boolean {
   return row.value === "1";
 }
 
-export function setOffline(on: boolean): void {
-  getDb()
-    .prepare(
-      `INSERT INTO app_settings (key, value) VALUES ('offline', ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    )
-    .run(on ? "1" : "0");
+/**
+ * 챗봇을 쓸 수 있나 — `CHAT_DISABLED=1`이면 끈다.
+ *
+ * 오프라인 모드와 **따로 두는 이유**가 있다. 오프라인은 밖으로 나가는 것 전부
+ * (항공권·숙소·환율·구글 캘린더)를 같이 끄는 스위치다. 인터넷에 올린 배포본은 그것들을
+ * 다 쓰고 싶은데 챗봇만 빼고 싶다 — 챗봇이 끌고 오는 비용이 나머지와 급이 다르기 때문이다:
+ * Claude Code 실행 파일이 215MB이고, 자식 프로세스로 뜨느라 RAM을 요구하며,
+ * `ANTHROPIC_API_KEY`를 서버에 둬야 해서 **요금이 서버를 띄운 계정에 붙는다.**
+ *
+ * DB가 아니라 환경변수인 이유: 이건 사용자가 바꿀 취향이 아니라 **그 배포본의 성질**이다.
+ * 바이너리를 안 담고 올린 이미지에서 화면의 토글로 켤 수 있으면 켜자마자 고장 난다.
+ */
+export function isChatEnabled(): boolean {
+  return process.env.CHAT_DISABLED !== "1";
+}
+
+export async function setOffline(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('offline', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
 }

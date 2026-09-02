@@ -154,7 +154,7 @@ export default function EventItem({
               {event.title}
             </span>
           )}
-          {/* lib/events의 런타임 함수를 import하면 node:sqlite가 클라이언트 번들로 끌려온다 */}
+          {/* lib/events의 런타임 함수를 import하면 @libsql/client가 클라이언트 번들로 끌려온다 */}
           {event.endDate > event.date && (
             <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent">
               {formatShortKo(event.date)} ~ {formatShortKo(event.endDate)}

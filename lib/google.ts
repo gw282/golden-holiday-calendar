@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { all, get, run, batch } from "./db";
 import { addDays, isValidDateStr, today, type DateStr } from "./date";
 import { createEvent, ValidationError } from "./events";
 
@@ -177,32 +177,31 @@ export async function exchangeCode(code: string): Promise<void> {
     );
   }
 
-  getDb()
-    .prepare(
-      `INSERT INTO google_auth (id, access_token, refresh_token, expires_at, email, calendar_id, calendar_name)
-       VALUES (1, ?, ?, ?, ?, 'primary', '')
-       ON CONFLICT(id) DO UPDATE SET
-         access_token  = excluded.access_token,
-         refresh_token = excluded.refresh_token,
-         expires_at    = excluded.expires_at,
-         email         = excluded.email`,
-    )
-    .run(
+  await run(
+    `INSERT INTO google_auth (id, access_token, refresh_token, expires_at, email, calendar_id, calendar_name)
+     VALUES (1, ?, ?, ?, ?, 'primary', '')
+     ON CONFLICT(id) DO UPDATE SET
+       access_token  = excluded.access_token,
+       refresh_token = excluded.refresh_token,
+       expires_at    = excluded.expires_at,
+       email         = excluded.email`,
+    [
       data.access_token,
       data.refresh_token,
       expiryFrom(data.expires_in),
       emailFromIdToken(data.id_token),
-    );
+    ],
+  );
 }
 
-function authRow(): AuthRow | null {
-  const row = getDb().prepare(`SELECT * FROM google_auth WHERE id = 1`).get();
-  return (row as unknown as AuthRow) ?? null;
+async function authRow(): Promise<AuthRow | null> {
+  const row = await get<AuthRow>(`SELECT * FROM google_auth WHERE id = 1`);
+  return row ?? null;
 }
 
 /** 필요하면 갱신해서, 바로 쓸 수 있는 액세스 토큰을 준다 */
 async function accessToken(): Promise<string> {
-  const row = authRow();
+  const row = await authRow();
   if (!row) throw new GoogleError("구글 캘린더가 연결되어 있지 않습니다.");
   if (new Date(row.expires_at).getTime() > Date.now()) return row.access_token;
 
@@ -214,9 +213,10 @@ async function accessToken(): Promise<string> {
   });
   if (!data.access_token) throw new GoogleError("토큰을 갱신하지 못했습니다.");
 
-  getDb()
-    .prepare(`UPDATE google_auth SET access_token = ?, expires_at = ? WHERE id = 1`)
-    .run(data.access_token, expiryFrom(data.expires_in));
+  await run(`UPDATE google_auth SET access_token = ?, expires_at = ? WHERE id = 1`, [
+    data.access_token,
+    expiryFrom(data.expires_in),
+  ]);
   return data.access_token;
 }
 
@@ -235,8 +235,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ── 상태 · 해제 ──────────────────────────────────────────
 
-export function connection(): GoogleConnection {
-  const row = authRow();
+export async function connection(): Promise<GoogleConnection> {
+  const row = await authRow();
   return {
     connected: Boolean(row),
     configured: isConfigured(),
@@ -254,7 +254,7 @@ export function connection(): GoogleConnection {
  * 남는데, 주인이 없어져 다시는 갱신되지 않는 유령이 된다.
  */
 export async function disconnect(): Promise<number> {
-  const row = authRow();
+  const row = await authRow();
   if (row) {
     // 취소가 실패해도(이미 만료 등) 이쪽 정리는 진행한다.
     // 구글에 못 알린다고 해제 자체가 막히면 사용자는 빠져나갈 길이 없다.
@@ -264,10 +264,9 @@ export async function disconnect(): Promise<number> {
       body: new URLSearchParams({ token: row.refresh_token }),
     }).catch(() => undefined);
   }
-  const db = getDb();
-  const { changes } = db.prepare(`DELETE FROM events WHERE google_id != ''`).run();
-  db.prepare(`DELETE FROM google_auth WHERE id = 1`).run();
-  return Number(changes);
+  const { rowsAffected } = await run(`DELETE FROM events WHERE google_id != ''`);
+  await run(`DELETE FROM google_auth WHERE id = 1`);
+  return rowsAffected;
 }
 
 // ── 캘린더 목록 ──────────────────────────────────────────
@@ -286,13 +285,17 @@ export async function listCalendars(): Promise<CalendarChoice[]> {
   }));
 }
 
-export function chooseCalendar(id: string, name: string): void {
-  const db = getDb();
-  // 캘린더를 바꾸면 이전 캘린더에서 받아 온 것은 남길 이유가 없다
-  db.prepare(`DELETE FROM events WHERE google_id != ''`).run();
-  db.prepare(
-    `UPDATE google_auth SET calendar_id = ?, calendar_name = ?, last_synced_at = NULL WHERE id = 1`,
-  ).run(id, name);
+export async function chooseCalendar(id: string, name: string): Promise<void> {
+  // 캘린더를 바꾸면 이전 캘린더에서 받아 온 것은 남길 이유가 없다.
+  // 지우기와 바꾸기를 한 트랜잭션으로 묶는다 — 중간에 끊기면 "캘린더는 그대로인데
+  // 받아 온 일정만 사라진" 상태가 남는다.
+  await batch([
+    { sql: `DELETE FROM events WHERE google_id != ''`, args: [] },
+    {
+      sql: `UPDATE google_auth SET calendar_id = ?, calendar_name = ?, last_synced_at = NULL WHERE id = 1`,
+      args: [id, name],
+    },
+  ]);
 }
 
 // ── 동기화 ───────────────────────────────────────────────
@@ -316,7 +319,7 @@ export type SyncResult = { added: number; updated: number; removed: number; tota
  * 어느 쪽이 이기는지를 물어야 하는데, 그건 이 앱이 감당할 복잡도가 아니다.
  */
 export async function syncEvents(): Promise<SyncResult> {
-  const row = authRow();
+  const row = await authRow();
   if (!row) throw new GoogleError("구글 캘린더가 연결되어 있지 않습니다.");
 
   const from = addDays(today(), -WINDOW_BACK_DAYS);
@@ -347,16 +350,19 @@ export async function syncEvents(): Promise<SyncResult> {
     pageToken = data.nextPageToken;
   }
 
-  const db = getDb();
-  const existing = db
-    .prepare(`SELECT id, google_id, date, end_date FROM events WHERE google_id != ''`)
-    .all() as unknown as Array<{ id: number; google_id: string; date: DateStr; end_date: DateStr }>;
+  const existing = await all<{
+    id: number;
+    google_id: string;
+    date: DateStr;
+    end_date: DateStr;
+  }>(`SELECT id, google_id, date, end_date FROM events WHERE google_id != ''`);
   const byGoogleId = new Map(existing.map((e) => [e.google_id, e.id]));
 
-  const update = db.prepare(
-    `UPDATE events SET title = ?, date = ?, end_date = ?, start_time = ?, end_time = ?, memo = ?
-     WHERE id = ?`,
-  );
+  const updateSql = `UPDATE events SET title = ?, date = ?, end_date = ?, start_time = ?, end_time = ?, memo = ?
+     WHERE id = ?`;
+  // 고칠 것을 모아 뒀다가 한 번에 보낸다. 동기화는 수백 건이 오는 일이 있어서,
+  // 건마다 왕복하면 원격 DB에서 이 함수만 몇 분이 된다.
+  const updates: Array<{ sql: string; args: Array<string | number | null> }> = [];
 
   let added = 0;
   let updated = 0;
@@ -370,20 +376,23 @@ export async function syncEvents(): Promise<SyncResult> {
 
     const existingId = byGoogleId.get(item.id);
     if (existingId !== undefined) {
-      update.run(
-        parsed.title,
-        parsed.date,
-        parsed.endDate,
-        parsed.startTime,
-        parsed.endTime,
-        parsed.memo,
-        existingId,
-      );
+      updates.push({
+        sql: updateSql,
+        args: [
+          parsed.title,
+          parsed.date,
+          parsed.endDate,
+          parsed.startTime,
+          parsed.endTime,
+          parsed.memo,
+          existingId,
+        ],
+      });
       updated += 1;
       continue;
     }
     try {
-      createEvent({ ...parsed, googleId: item.id });
+      await createEvent({ ...parsed, googleId: item.id });
       added += 1;
     } catch (e) {
       // 한 건이 틀렸다고 나머지를 버리지 않는다
@@ -393,16 +402,22 @@ export async function syncEvents(): Promise<SyncResult> {
 
   // 구글에서 지워진 일정은 이쪽에서도 지운다 — **받아 온 구간 안에 있는 것만.**
   // 구간 밖(작년 일정 등)까지 지우면 창을 옮길 때마다 멀쩡한 기록이 사라진다.
-  const remove = db.prepare(`DELETE FROM events WHERE id = ?`);
-  let removed = 0;
+  const removals: Array<{ sql: string; args: Array<string | number | null> }> = [];
   for (const e of existing) {
     if (seen.has(e.google_id)) continue;
     if (e.end_date < from || e.date > to) continue;
-    remove.run(e.id);
-    removed += 1;
+    removals.push({ sql: `DELETE FROM events WHERE id = ?`, args: [e.id] });
   }
+  const removed = removals.length;
 
-  db.prepare(`UPDATE google_auth SET last_synced_at = datetime('now') WHERE id = 1`).run();
+  await batch([
+    ...updates,
+    ...removals,
+    {
+      sql: `UPDATE google_auth SET last_synced_at = datetime('now') WHERE id = 1`,
+      args: [],
+    },
+  ]);
   return { added, updated, removed, total: seen.size };
 }
 

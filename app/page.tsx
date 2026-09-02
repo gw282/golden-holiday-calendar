@@ -11,7 +11,7 @@ import { collectCandidates } from "@/lib/bridge";
 import { busyDates, listEvents, listEventsByDate, timeConflictIds } from "@/lib/events";
 import { leaveSummaries } from "@/lib/leave";
 import { fxSnapshot } from "@/lib/fx";
-import { isOffline } from "@/lib/settings";
+import { isChatEnabled, isOffline } from "@/lib/settings";
 import { isConfigured as googleConfigured } from "@/lib/google";
 import {
   addDays,
@@ -95,20 +95,20 @@ export default async function Home(props: PageProps<"/">) {
       ? { start: hlStart, end: hlEnd }
       : null;
 
-  const grid = buildMonth(month);
+  const grid = await buildMonth(month);
 
-  const coverage = holidayCoverage();
+  const coverage = await holidayCoverage();
   const horizonEnd = addDays(t, HORIZON_DAYS);
   const searchEnd = coverage && coverage.to < horizonEnd ? coverage.to : horizonEnd;
 
   // 이미 일정이 잡힌 날에는 연차를 낼 수 없다 — 후보 생성 단계에서 걸러 낸다
-  const busy = new Set(busyDates(t, searchEnd));
+  const busy = new Set(await busyDates(t, searchEnd));
 
   // 보고 있는 해의 월별 공휴일 브리핑. 추천이 아니라 사실 요약이라
   // 지난 달도 빼지 않고 1월부터 12월까지 그대로 보여 준다.
   const viewYear = month.slice(0, 4);
   const briefing = new Map<string, { names: string[]; days: number }>();
-  for (const h of listHolidays(`${viewYear}-01-01`, `${viewYear}-12-31`)) {
+  for (const h of await listHolidays(`${viewYear}-01-01`, `${viewYear}-12-31`)) {
     const key = h.date.slice(5, 7);
     const entry = briefing.get(key) ?? { names: [], days: 0 };
     const name = shortHolidayName(h.name);
@@ -120,12 +120,12 @@ export default async function Home(props: PageProps<"/">) {
   // 연도 단추에 적는다. 숫자가 있어야 눌러 볼 이유가 생긴다 — '2026년'만 있으면 그냥 제목이다
   const holidayDaysInYear = briefingRows.reduce((sum, [, entry]) => sum + entry.days, 0);
 
-  const dayEvents = listEventsByDate(selected);
+  const dayEvents = await listEventsByDate(selected);
   // 같은 날 시각이 겹치는 일정. 저장을 막지는 않고 목록에 표시만 한다.
   // 클라이언트에서 계산하면 lib/events가 클라이언트 번들로 끌려오므로 여기서 구해 넘긴다.
   const dayConflicts = timeConflictIds(dayEvents);
   const doneCount = dayEvents.filter((e) => e.done).length;
-  const selectedHoliday = getHoliday(selected);
+  const selectedHoliday = await getHoliday(selected);
 
   // 고른 날이 **들어가는** 연휴 조합. 공휴일이 아니어도 된다 —
   // 평일을 골라도 "이 날을 연차로 쓰면 어떻게 되나"가 바로 나온다.
@@ -133,14 +133,16 @@ export default async function Home(props: PageProps<"/">) {
   const dayFrom = maxDate(t, addDays(selected, -DAY_PICK_PAD));
   const dayTo = minDate(searchEnd, addDays(selected, DAY_PICK_PAD));
 
-  const pickFor = (includeHolidayFree: boolean) =>
-    collectCandidates({
-      from: dayFrom,
-      to: dayTo,
-      maxLeaves: DAY_MAX_LEAVES,
-      busyDates: busy,
-      includeHolidayFree,
-    })
+  const pickFor = async (includeHolidayFree: boolean) =>
+    (
+      await collectCandidates({
+        from: dayFrom,
+        to: dayTo,
+        maxLeaves: DAY_MAX_LEAVES,
+        busyDates: busy,
+        includeHolidayFree,
+      })
+    )
       .filter((c) => c.start <= selected && selected <= c.end)
       // 연차를 적게 쓰는 순 → 같은 연차면 긴 순. "1일 쓰면 …, 2일 쓰면 …"으로 읽힌다
       .sort(
@@ -150,7 +152,7 @@ export default async function Home(props: PageProps<"/">) {
           (a.start < b.start ? -1 : 1),
       );
 
-  const withHolidays = dayFrom <= dayTo ? pickFor(false) : [];
+  const withHolidays = dayFrom <= dayTo ? await pickFor(false) : [];
   /**
    * 공휴일을 낀 조합이 하나도 없는 날 — 5월이나 11월처럼 공휴일이 비는 달이 실제로 있다.
    * 그럴 때 아무것도 안 그리면 "이 날 연차 쓰면 어떻게 되나"라는 질문 자체에 답을 못 한다.
@@ -160,7 +162,7 @@ export default async function Home(props: PageProps<"/">) {
    * 다만 그건 '황금연휴'가 아니라 그냥 주말 늘리기라, 아래에서 제목을 달리 붙인다.
    */
   const holidayFree = withHolidays.length === 0;
-  const dayPicks = holidayFree && dayFrom <= dayTo ? pickFor(true) : withHolidays;
+  const dayPicks = holidayFree && dayFrom <= dayTo ? await pickFor(true) : withHolidays;
 
   // 항상 연차 수 하나를 고른 상태로 둔다. 기본은 가장 적게 쓰는 쪽.
   const leaveCounts = [...new Set(dayPicks.map((c) => c.leaveCount))].sort((a, b) => a - b);
@@ -168,7 +170,7 @@ export default async function Home(props: PageProps<"/">) {
   const pickedLeave = leaveCounts.includes(rawLeave) ? rawLeave : (leaveCounts[0] ?? null);
   const dayRows = dayPicks.filter((c) => c.leaveCount === pickedLeave);
 
-  const all = listEvents();
+  const all = await listEvents();
   // 앞으로 4주. 공휴일은 일정이 아니므로 이 줄에는 섞지 않는다.
   // 진행 중인 일정도 넣는다 — 시작일만 보면 오늘 시작한 일정과 어제 시작해
   // 오늘까지 이어지는 기간 일정이 두 목록 어디에도 안 나온다.
@@ -214,8 +216,8 @@ export default async function Home(props: PageProps<"/">) {
   }
 
   // 앞뒤로 가장 가까운 공휴일. 달을 하나씩 넘기며 찾을 필요가 없다.
-  const prevHoliday = adjacentHoliday(selected, "prev");
-  const nextHoliday = adjacentHoliday(selected, "next");
+  const prevHoliday = await adjacentHoliday(selected, "prev");
+  const nextHoliday = await adjacentHoliday(selected, "next");
 
   // 머리말에 띄울 휴가 잔고. **오늘 기준**이다.
   //
@@ -223,9 +225,9 @@ export default async function Home(props: PageProps<"/">) {
   // 확 줄어든다. 소멸까지 남은 날은 **내가 오늘 몇 밤 남았나**를 묻는 값이라
   // 달력에서 어디를 보고 있는지와 상관이 없어야 한다. 주기도 같은 이유로 오늘 기준이다 —
   // 머리말의 잔고는 "그 날의 잔고"가 아니라 "내 잔고"다.
-  const leaves = leaveSummaries();
+  const leaves = await leaveSummaries();
   // 일정 팝업이 고를 수 있는 종류. 고르는 데 필요한 것만 넘긴다
-  // (클라이언트가 lib/leave를 import하면 node:sqlite가 번들로 끌려온다)
+  // (클라이언트가 lib/leave를 import하면 @libsql/client가 번들로 끌려온다)
   const leaveTypes = leaves.map((l) => ({
     id: l.type.id,
     name: l.type.name,
@@ -236,7 +238,7 @@ export default async function Home(props: PageProps<"/">) {
   // 환율표 전체를 늘어놓으면 달력보다 커진다. 못 받아도 화면은 그대로 그려진다 (lib/fx.ts 참고).
   // 오프라인이면 **부르지도 않는다.** 화면에서 감추기만 하면 서버는 여전히 밖으로 나가려다
   // 타임아웃을 먹고, 그만큼 페이지가 늦게 뜬다.
-  const offline = isOffline();
+  const offline = await isOffline();
   // 자격 증명(.env.local)이 없으면 구글 단추는 눌러도 "설정하세요" 안내만 나온다.
   // 눌러도 아무것도 안 되는 단추를 화면에 두지 않는다 — 채워 넣으면 그때 나타난다.
   const showGoogle = !offline && googleConfigured();
@@ -409,7 +411,7 @@ export default async function Home(props: PageProps<"/">) {
         {/* 검색과 챗봇을 **한 줄로 합쳤다.** 따로 두면 두 줄이 되어 그만큼 달력이
             아래로 밀리고, 사용자도 "치과"를 어디에 쳐야 하는지 매번 판단해야 했다 */}
         <section className="flex min-w-0 flex-col gap-2 rounded-xl border border-border bg-surface px-3 py-2 shadow-sm lg:col-span-5 lg:col-start-8">
-          <OmniSearch offline={offline} />
+          <OmniSearch offline={offline} chat={isChatEnabled()} />
         </section>
       </div>
 

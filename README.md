@@ -32,13 +32,14 @@
 ## 스택
 
 - **Next.js 16** (App Router, Turbopack, TypeScript) · **Tailwind CSS v4**
-- **SQLite — Node 24 내장 `node:sqlite`** (네이티브 빌드 없음)
+- **SQLite — libSQL (`@libsql/client`)** · 로컬은 `data/app.db` 파일, 클라우드는 Turso.
+  같은 코드가 양쪽을 다 본다 — 주소만 다르다 (네이티브 빌드 없음)
 - 화면 상태(월·선택일·연차 수)는 전부 **URL 쿼리스트링**에 있어 달력에 클라이언트 JS가 없다
 - 챗봇만 Claude Agent SDK, 환율만 외부 API(`open.er-api.com`)
 
 ## 실행
 
-**Node 24 이상**이 필요하다. 24 미만에서는 `node:sqlite`가 없어 뜨지 않는다.
+**Node 24 이상**이 필요하다 (`package.json`의 `engines`).
 
 ```bash
 npm install
@@ -58,6 +59,10 @@ npm run package        # → dist/  (약 28MB)
 `dist/`를 통째로 옮기고 `시작.bat`(리눅스·맥은 `node server.js`)만 실행하면 된다.
 받는 쪽에 필요한 것은 **Node 24 하나**뿐이다 — `npm install`도 인터넷도 필요 없다.
 
+> ⚠️ 단, **OS·아키텍처가 만든 PC와 같아야 한다.** libSQL이 로컬 파일을 여는 데
+> 네이티브 애드온을 써서 플랫폼 전용 패키지가 한 개 실려 나간다(윈도우에서 만들면
+> `@libsql/win32-x64-msvc`). 다른 OS로 옮길 거면 받는 쪽에서 `npm install`을 한 번 한다.
+
 - 인터넷이 없는 곳에서 쓸 거면 `OFFLINE_DEFAULT=1`로 띄운다
 - 백업은 `data/app.db` 파일 하나 복사
 - `npm run package`는 **dev 서버가 떠 있으면 실패한다** (`.next`를 같이 쓰다 깨진다)
@@ -65,6 +70,35 @@ npm run package        # → dist/  (약 28MB)
 > ⚠️ Vercel·Netlify에는 올릴 수 없다. 서버리스라 파일 시스템이 읽기 전용이고 인스턴스가
 > 요청마다 사라져서, **일정을 저장하는 순간 없어진다.** 영구 볼륨을 붙일 수 있는 곳
 > (Fly.io·Railway 등)이나 사내 서버에 올린다.
+
+## 배포 — 인터넷에 올리기 (Fly.io)
+
+`Dockerfile`과 `fly.toml`이 들어 있다. 필요한 것은 `flyctl` 하나다.
+
+```bash
+fly auth login
+fly apps create golden-holiday-calendar        # 이름은 전 세계에서 유일해야 한다
+fly volumes create data --size 1 --region nrt  # 일정이 여기 남는다
+fly secrets set APP_PASSWORD=고를비밀번호
+fly deploy --ha=false                          # ⚠️ --ha=false 없으면 두 대가 뜬다
+```
+
+- **머신은 하나여야 한다.** DB가 SQLite 파일 하나이고 볼륨은 머신 하나에만 붙는다.
+  두 대가 뜨면 DB도 갈라져서 요청마다 다른 일정이 보인다.
+- **비밀번호를 반드시 넣는다.** 이 앱에는 로그인이 없다. `APP_PASSWORD`를 넣으면
+  브라우저 기본 암호 창이 뜬다 (`proxy.ts`, 아이디 칸은 아무거나 — 비밀번호만 본다).
+- **챗봇은 기본으로 빠진다.** Claude Code 실행 파일이 215MB이고, 자식 프로세스로 뜨느라
+  RAM을 요구하며, `ANTHROPIC_API_KEY`를 서버에 둬야 해서 **요금이 그 계정에 붙는다.**
+  담고 싶으면 `fly deploy --build-arg WITH_CHAT=1`, 그리고 `fly.toml`의 메모리를
+  `1024`로 올리고 `fly secrets set ANTHROPIC_API_KEY=...` `CHAT_DISABLED=`를 맞춘다.
+  빼도 검색(`/api/events?q=`)은 그대로 돌아간다 — 챗봇은 팝업에서 한 번 더 눌러야
+  도는 보조 경로다.
+- 구글 캘린더를 쓸 거면 리디렉션 주소가 `localhost`가 아니다:
+  `fly secrets set GOOGLE_REDIRECT_URI=https://<앱이름>.fly.dev/api/google/callback`
+  하고 **같은 주소를 구글 콘솔에도** 등록한다.
+- 백업은 `fly ssh console -C "cat /app/data/app.db" > app.db` 대신
+  `fly ssh sftp get /app/data/app.db`가 안전하다 (WAL 때문에 `app.db` 하나만 떠 오면
+  최근 쓰기가 빠질 수 있다 — 화면의 백업 단추를 쓰는 편이 낫다).
 
 ## 구글 캘린더 (선택)
 

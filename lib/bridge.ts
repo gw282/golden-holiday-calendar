@@ -64,7 +64,7 @@ export type CandidateOptions = {
 };
 
 /** 대상 기간의 모든 "연휴 후보"를 만든다. 정렬하지 않은 채로 돌려준다. */
-export function collectCandidates(o: CandidateOptions): BridgeCandidate[] {
+export async function collectCandidates(o: CandidateOptions): Promise<BridgeCandidate[]> {
   const { from, to } = o;
   const maxLeaves = Math.max(1, Math.min(10, Math.trunc(o.maxLeaves ?? 3)));
   const minLeaves = Math.max(1, Math.min(maxLeaves, Math.trunc(o.minLeaves ?? 1)));
@@ -78,7 +78,7 @@ export function collectCandidates(o: CandidateOptions): BridgeCandidate[] {
   //    (창 경계에 걸친 연휴의 실제 길이를 놓치지 않기 위한 패딩)
   const winStart = addDays(from, -PAD_DAYS);
   const winEnd = addDays(to, PAD_DAYS);
-  const holidays = holidayMap(winStart, winEnd);
+  const holidays = await holidayMap(winStart, winEnd);
   const days = eachDay(winStart, winEnd);
   const n = days.length;
 

@@ -2,7 +2,7 @@
  * 일정 색깔 팔레트.
  *
  * 이 파일은 **DB를 import하지 않는다.** 색 고르는 UI가 클라이언트 컴포넌트라
- * `lib/events.ts`에서 값을 가져오면 `node:sqlite`가 클라이언트 번들로 끌려온다.
+ * `lib/events.ts`에서 값을 가져오면 `@libsql/client`가 클라이언트 번들로 끌려온다.
  *
  * 색은 Tailwind 클래스가 아니라 hex로 둔다. 클래스명을 문자열로 조립하면
  * Tailwind가 빌드 때 그 클래스를 못 찾아 스타일이 통째로 빠진다.

@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { all, get, run, batch } from "./db";
 import { addDays, diffDays, eachDay, isValidDateStr, minutesOf, type DateStr } from "./date";
 import { isEventColorKey } from "./eventColors";
 
@@ -114,31 +114,31 @@ const SELECT = `
     (SELECT COUNT(*) FROM event_tasks t WHERE t.event_id = e.id AND t.done = 1) AS tasks_done
   FROM events e`;
 
-export function listEvents(): Event[] {
-  const rows = getDb().prepare(`${SELECT} ${ORDER}`).all() as unknown as EventRow[];
+export async function listEvents(): Promise<Event[]> {
+  const rows = await all<EventRow>(`${SELECT} ${ORDER}`);
   return rows.map(toEvent);
 }
 
 /** 그 날에 걸쳐 있는 일정 — 시작일이 그 날인 것만이 아니라 기간에 포함되면 나온다 */
-export function listEventsByDate(date: DateStr): Event[] {
-  const rows = getDb()
-    .prepare(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`)
-    .all(date, date) as unknown as EventRow[];
+export async function listEventsByDate(date: DateStr): Promise<Event[]> {
+  const rows = await all<EventRow>(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`, [
+    date,
+    date,
+  ]);
   return rows.map(toEvent);
 }
 
 /** [from, to]와 하루라도 겹치는 일정 */
-export function listEventsBetween(from: DateStr, to: DateStr): Event[] {
-  const rows = getDb()
-    .prepare(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`)
-    .all(to, from) as unknown as EventRow[];
+export async function listEventsBetween(from: DateStr, to: DateStr): Promise<Event[]> {
+  const rows = await all<EventRow>(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`, [
+    to,
+    from,
+  ]);
   return rows.map(toEvent);
 }
 
-export function getEvent(id: number): Event | null {
-  const row = getDb().prepare(`${SELECT} WHERE e.id = ?`).get(id) as
-    | unknown as EventRow
-    | undefined;
+export async function getEvent(id: number): Promise<Event | null> {
+  const row = await get<EventRow>(`${SELECT} WHERE e.id = ?`, [id]);
   return row ? toEvent(row) : null;
 }
 
@@ -266,7 +266,7 @@ function repeatDates(start: DateStr, freq: RepeatFreq, count: number): DateStr[]
   return out;
 }
 
-export function createEvent(input: CreateInput): Event {
+export async function createEvent(input: CreateInput): Promise<Event> {
   const title = typeof input.title === "string" ? input.title.trim() : "";
   if (!title) throw new ValidationError("제목을 입력해 주세요.");
   if (!isValidDateStr(input.date)) throw new ValidationError("날짜는 'YYYY-MM-DD' 형식이어야 합니다.");
@@ -306,33 +306,36 @@ export function createEvent(input: CreateInput): Event {
   // 기간(일수)은 회차마다 그대로 유지한다
   const span = diffDays(input.date, endDate);
 
-  const insert = getDb().prepare(
-    `INSERT INTO events (title, date, end_date, start_time, end_time, memo, color, series_id, is_leave, leave_type_id, leave_days, done, google_id, import_batch_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  const sql = `INSERT INTO events (title, date, end_date, start_time, end_time, memo, color, series_id, is_leave, leave_type_id, leave_days, done, google_id, import_batch_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+  // 반복 일정은 회차가 60개까지 나온다. 하나씩 await하면 원격 DB에서 왕복이 60번이라
+  // '한 번 추가'가 눈에 보이게 느려진다. 한 트랜잭션으로 묶어 한 번에 보낸다.
+  const results = await batch(
+    starts.map((start) => ({
+      sql,
+      args: [
+        title,
+        start,
+        addDays(start, span),
+        startTime,
+        endTime,
+        memo,
+        color,
+        seriesId,
+        isLeave ? 1 : 0,
+        leaveTypeId,
+        leaveDays,
+        input.done ? 1 : 0,
+        typeof input.googleId === "string" ? input.googleId : "",
+        typeof input.importBatchId === "number" ? input.importBatchId : null,
+      ],
+    })),
   );
 
-  let firstId = 0;
-  for (const start of starts) {
-    const { lastInsertRowid } = insert.run(
-      title,
-      start,
-      addDays(start, span),
-      startTime,
-      endTime,
-      memo,
-      color,
-      seriesId,
-      isLeave ? 1 : 0,
-      leaveTypeId,
-      leaveDays,
-      input.done ? 1 : 0,
-      typeof input.googleId === "string" ? input.googleId : "",
-      typeof input.importBatchId === "number" ? input.importBatchId : null
-    );
-    if (!firstId) firstId = Number(lastInsertRowid);
-  }
-
-  return getEvent(firstId)!;
+  const first = results[0]?.lastInsertRowid;
+  const firstId = first === undefined ? 0 : Number(first);
+  return (await getEvent(firstId))!;
 }
 
 function normalizeRepeat(v: CreateInput["repeat"]): { freq: RepeatFreq; count: number } | null {
@@ -353,28 +356,27 @@ function normalizeRepeat(v: CreateInput["repeat"]): { freq: RepeatFreq; count: n
  * 제목·시작일·종료일·시작시각이 모두 같으면 같은 일정으로 본다. 메모나 색까지 보면
  * 남의 캘린더에서 받은 파일을 다시 받을 때 사소한 차이로 중복이 생긴다.
  */
-export function eventExists(input: {
+export async function eventExists(input: {
   title: string;
   date: DateStr;
   endDate: DateStr;
   startTime: string | null;
-}): boolean {
-  const row = getDb()
-    .prepare(
-      // start_time에는 NULL(하루 종일)이 들어가므로 =가 아니라 IS로 비교한다
-      `SELECT 1 FROM events
-       WHERE title = ? AND date = ? AND end_date = ? AND start_time IS ?
-       LIMIT 1`
-    )
-    .get(input.title, input.date, input.endDate, input.startTime);
+}): Promise<boolean> {
+  const row = await get(
+    // start_time에는 NULL(하루 종일)이 들어가므로 =가 아니라 IS로 비교한다
+    `SELECT 1 FROM events
+     WHERE title = ? AND date = ? AND end_date = ? AND start_time IS ?
+     LIMIT 1`,
+    [input.title, input.date, input.endDate, input.startTime],
+  );
   return row !== undefined;
 }
 
 /** 같은 반복 묶음 전체를 지운다. 지운 개수를 돌려준다. */
-export function deleteSeries(seriesId: string): number {
+export async function deleteSeries(seriesId: string): Promise<number> {
   if (!seriesId) return 0;
-  const { changes } = getDb().prepare(`DELETE FROM events WHERE series_id = ?`).run(seriesId);
-  return Number(changes);
+  const { rowsAffected } = await run(`DELETE FROM events WHERE series_id = ?`, [seriesId]);
+  return rowsAffected;
 }
 
 export type UpdateInput = Partial<{
@@ -392,8 +394,8 @@ export type UpdateInput = Partial<{
 }>;
 
 /** 전달된 필드만 갱신한다 (완료 토글도 이 함수로 처리). */
-export function updateEvent(id: number, patch: UpdateInput): Event | null {
-  const current = getEvent(id);
+export async function updateEvent(id: number, patch: UpdateInput): Promise<Event | null> {
+  const current = await getEvent(id);
   if (!current) return null;
 
   const sets: string[] = [];
@@ -505,13 +507,13 @@ export function updateEvent(id: number, patch: UpdateInput): Event | null {
   if (sets.length === 0) throw new ValidationError("변경할 항목이 없습니다.");
 
   values.push(id);
-  getDb().prepare(`UPDATE events SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+  await run(`UPDATE events SET ${sets.join(", ")} WHERE id = ?`, values);
   return getEvent(id);
 }
 
-export function deleteEvent(id: number): boolean {
-  const { changes } = getDb().prepare(`DELETE FROM events WHERE id = ?`).run(id);
-  return Number(changes) > 0;
+export async function deleteEvent(id: number): Promise<boolean> {
+  const { rowsAffected } = await run(`DELETE FROM events WHERE id = ?`, [id]);
+  return rowsAffected > 0;
 }
 
 /**
@@ -529,16 +531,15 @@ export function deleteEvent(id: number): boolean {
  *
  * 남는 것은 "단발로 잡힌 하루 종일 일정" — 출장·경조사처럼 정말 그 날을 못 비우는 것들이다.
  */
-export function busyDates(from: DateStr, to: DateStr): DateStr[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT date, end_date FROM events
-       WHERE done = 0
-         AND start_time IS NULL
-         AND series_id = ''
-         AND date <= ? AND end_date >= ?`
-    )
-    .all(to, from) as unknown as Array<{ date: DateStr; end_date: DateStr }>;
+export async function busyDates(from: DateStr, to: DateStr): Promise<DateStr[]> {
+  const rows = await all<{ date: DateStr; end_date: DateStr }>(
+    `SELECT date, end_date FROM events
+     WHERE done = 0
+       AND start_time IS NULL
+       AND series_id = ''
+       AND date <= ? AND end_date >= ?`,
+    [to, from],
+  );
 
   // 여러 날짜에 걸친 일정은 그 사이 날이 전부 막힌다
   const out = new Set<DateStr>();
@@ -563,7 +564,7 @@ export type SearchResult = {
   hasMore: boolean;
 };
 
-export function searchEvents(query: string, limit = 30): SearchResult {
+export async function searchEvents(query: string, limit = 30): Promise<SearchResult> {
   const q = query.trim();
   if (!q) return { events: [], hasMore: false };
 
@@ -577,14 +578,13 @@ export function searchEvents(query: string, limit = 30): SearchResult {
   // idx_events_date를 역주행하며 필요한 행만 채우고 조기 종료한다.
   // 5만 행에서 실측: LIMIT 31이 1.26ms, 같은 조건의 COUNT(*)가 5.08ms.
   // 정확한 숫자를 보여 주려고 매 검색을 전량 스캔으로 바꾸는 건 남는 장사가 아니다.
-  const rows = getDb()
-    .prepare(
-      `${SELECT}
-       WHERE title LIKE ? ESCAPE '\\' OR memo LIKE ? ESCAPE '\\'
-       ORDER BY date DESC, e.id DESC
-       LIMIT ?`
-    )
-    .all(like, like, limit + 1) as unknown as EventRow[];
+  const rows = await all<EventRow>(
+    `${SELECT}
+     WHERE title LIKE ? ESCAPE '\\' OR memo LIKE ? ESCAPE '\\'
+     ORDER BY date DESC, e.id DESC
+     LIMIT ?`,
+    [like, like, limit + 1],
+  );
 
   return {
     events: rows.slice(0, limit).map(toEvent),

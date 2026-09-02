@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { all, get } from "./db";
 import { isMultiDay, listEventsBetween, type Event } from "./events";
 import type { Holiday } from "./holidays";
 import {
@@ -22,21 +22,22 @@ import {
  * 순환 참조가 되기 때문에 이 파일에 모아 둔다. `lib/bridge.ts`도 여기서 가져다 쓴다.
  */
 /**
- * `node:sqlite`가 주는 행은 **프로토타입이 null인 객체**다. 그대로 Server Component에서
+ * libSQL이 주는 행은 이름과 번호로 둘 다 접근되는 **평범하지 않은 객체**다. 그대로 Server Component에서
  * Client Component로 넘기면 "Only plain objects ... can be passed"로 500이 난다.
  * 그래서 여기서 평범한 객체 리터럴로 바꿔 담는다 (`lib/events.ts`의 toEvent와 같은 이유).
  */
 type HolidayRow = { date: DateStr; name: string; kind: Holiday["kind"] };
 
-export function listHolidays(from: DateStr, to: DateStr): Holiday[] {
-  const rows = getDb()
-    .prepare(`SELECT date, name, kind FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date`)
-    .all(from, to) as unknown as HolidayRow[];
+export async function listHolidays(from: DateStr, to: DateStr): Promise<Holiday[]> {
+  const rows = await all<HolidayRow>(
+    `SELECT date, name, kind FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date`,
+    [from, to],
+  );
   return rows.map((r) => ({ date: r.date, name: r.name, kind: r.kind }));
 }
 
-export function holidayMap(from: DateStr, to: DateStr): Map<DateStr, Holiday> {
-  return new Map(listHolidays(from, to).map((h) => [h.date, h]));
+export async function holidayMap(from: DateStr, to: DateStr): Promise<Map<DateStr, Holiday>> {
+  return new Map((await listHolidays(from, to)).map((h) => [h.date, h]));
 }
 
 /** 쉬는 날 = 주말 또는 공휴일 */
@@ -70,18 +71,18 @@ export type CalendarMonth = {
 };
 
 /** 한 달 그리드를 만든다. 일정·공휴일을 그리드 전체 범위로 한 번에 읽는다. */
-export function buildMonth(month: MonthStr): CalendarMonth {
+export async function buildMonth(month: MonthStr): Promise<CalendarMonth> {
   const first = monthStart(month);
   const last = monthEnd(month);
   const gridStart = startOfWeek(first);
   const gridEnd = addDays(startOfWeek(last), 6);
 
-  const holidays = holidayMap(gridStart, gridEnd);
+  const holidays = await holidayMap(gridStart, gridEnd);
 
   const byDate = new Map<DateStr, Event[]>();
   const spanning: Event[] = [];
 
-  for (const e of listEventsBetween(gridStart, gridEnd)) {
+  for (const e of await listEventsBetween(gridStart, gridEnd)) {
     if (isMultiDay(e)) {
       spanning.push(e);
       continue;
@@ -126,32 +127,36 @@ export function buildMonth(month: MonthStr): CalendarMonth {
  * 추천 기간을 여기까지로 잘라 두면, 데이터가 없는 해를 "공휴일이 하나도 없는 해"로
  * 착각해 훑는 낭비와 오해를 막을 수 있다.
  */
-export function holidayCoverage(): { from: DateStr; to: DateStr } | null {
-  const row = getDb()
-    .prepare(`SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM holidays`)
-    .get() as unknown as { min_date: string | null; max_date: string | null } | undefined;
+export async function holidayCoverage(): Promise<{ from: DateStr; to: DateStr } | null> {
+  const row = await get<{ min_date: string | null; max_date: string | null }>(
+    `SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM holidays`,
+  );
 
   return row?.min_date && row?.max_date ? { from: row.min_date, to: row.max_date } : null;
 }
 
 /** 그 날의 공휴일. 일정 목록에도 공휴일을 같이 보여 주려고 쓴다. */
-export function getHoliday(date: DateStr): Holiday | null {
-  const row = getDb()
-    .prepare(`SELECT date, name, kind FROM holidays WHERE date = ?`)
-    .get(date) as unknown as Holiday | undefined;
-  return row ?? null;
+export async function getHoliday(date: DateStr): Promise<Holiday | null> {
+  const row = await get<HolidayRow>(`SELECT date, name, kind FROM holidays WHERE date = ?`, [
+    date,
+  ]);
+  // 위 주석대로 **객체 리터럴로 다시 담아** 넘긴다. 이 값은 Client Component까지 간다.
+  return row ? { date: row.date, name: row.name, kind: row.kind } : null;
 }
 
 /**
  * 기준일 앞뒤로 가장 가까운 공휴일. 달을 하나씩 넘기며 찾을 필요 없이 바로 건너뛰라고 쓴다.
  * 기준일 자신은 제외한다 (같은 날에 머무르면 이동이 아니다).
  */
-export function adjacentHoliday(date: DateStr, direction: "prev" | "next"): Holiday | null {
+export async function adjacentHoliday(
+  date: DateStr,
+  direction: "prev" | "next",
+): Promise<Holiday | null> {
   const sql =
     direction === "next"
       ? `SELECT date, name, kind FROM holidays WHERE date > ? ORDER BY date ASC LIMIT 1`
       : `SELECT date, name, kind FROM holidays WHERE date < ? ORDER BY date DESC LIMIT 1`;
 
-  const row = getDb().prepare(sql).get(date) as unknown as Holiday | undefined;
-  return row ?? null;
+  const row = await get<HolidayRow>(sql, [date]);
+  return row ? { date: row.date, name: row.name, kind: row.kind } : null;
 }

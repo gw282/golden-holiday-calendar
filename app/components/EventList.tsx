@@ -16,7 +16,7 @@ export default function EventList({
   emptyText?: string;
   /**
    * 시각이 서로 겹치는 일정들의 id. 서버가 계산해 넘긴다 —
-   * lib/events의 런타임 함수를 여기서 부르면 node:sqlite가 클라이언트 번들로 끌려온다.
+   * lib/events의 런타임 함수를 여기서 부르면 @libsql/client가 클라이언트 번들로 끌려온다.
    */
   conflictIds?: number[];
   /** 수정 팝업이 고를 수 있는 휴가 종류 */
