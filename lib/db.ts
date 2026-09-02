@@ -15,13 +15,24 @@ const HOLIDAY_YEARS = 5;
 
 /**
  * 공휴일 시드 판. `lib/holidays.ts`의 **규칙을 고치면 이 수를 올린다.**
- *
- * 예전에는 커넥션을 만들 때마다 `DELETE FROM holidays` 후 다시 넣었다. 로컬에서는
- * 서버가 하나뿐이라 그래도 됐지만, 서버리스에서는 **콜드 스타트마다** 400여 행을
- * 지우고 다시 쓴다. 왕복도 비싸고 쓰기 할당량도 아깝다.
- * 그래서 판 번호와 대상 연도를 `meta`에 적어 두고, 달라졌을 때만 갈아 끼운다.
  */
 const HOLIDAY_SEED_VERSION = 1;
+
+/**
+ * 스키마 판. `migrate()`의 표·열·인덱스를 **고치면 이 수를 올린다.**
+ *
+ * 이것이 왜 필요한가: 서버리스에서는 요청마다 인스턴스가 새로 뜰 수 있어
+ * `globalThis` 캐시가 먹지 않는다. 그러면 `migrate()`의 DDL 40여 개가 **매 요청마다**
+ * 다시 도는데, 원격 DB에서는 그게 전부 개별 왕복이다.
+ *
+ * 실측(Vercel 서울 → Turso 도쿄): 이 판 검사를 넣기 전에
+ *   `/api/holidays`(쿼리 2개)가 1.7초, `/`(쿼리 10여 개)가 4.4초였다.
+ *   콜드 스타트가 아니라 **네 번 연속 같은 값**이었다 — 즉 구조적인 것이었다.
+ *
+ * 판이 같으면 DDL을 통째로 건너뛴다. 정상 상태에서 초기화 비용은 왕복 **두 번**이다
+ * (meta 표 보장 + 판 읽기).
+ */
+const SCHEMA_VERSION = 1;
 
 /**
  * DB 커넥션 싱글턴.
@@ -70,8 +81,32 @@ async function createDb(): Promise<Client> {
     // 원격에서는 서버가 정하고 이 PRAGMA를 받지 않을 수 있다. 실패해도 진행한다.
   }
 
+  /**
+   * 이미 최신이면 마이그레이션과 시드를 **건너뛴다.**
+   *
+   * 판 문자열에 스키마·공휴일 판과 대상 연도를 모두 넣는 이유: 어느 하나만 올려도
+   * 문자열이 달라져 다시 돌게 된다. 해가 바뀌면 대상 연도가 움직이므로 새해 첫 요청에
+   * 한 번 다시 돈다 — 그때 새 공휴일이 들어와야 하니 그게 맞다.
+   */
+  const thisYear = Number(today().slice(0, 4));
+  const stamp = `schema:${SCHEMA_VERSION}|holidays:${HOLIDAY_SEED_VERSION}:${thisYear}-${thisYear + HOLIDAY_YEARS}`;
+
+  // meta 표만 먼저 보장한다. 이것이 없으면 판을 읽을 데가 없다.
+  await db.execute(
+    `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
+  );
+  const current = (
+    await db.execute({ sql: `SELECT value FROM meta WHERE key = 'init'`, args: [] })
+  ).rows[0] as unknown as { value: string } | undefined;
+  if (current?.value === stamp) return db;
+
   await migrate(db);
   await seed(db);
+  await db.execute({
+    sql: `INSERT INTO meta (key, value) VALUES ('init', ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    args: [stamp],
+  });
 
   return db;
 }
@@ -455,22 +490,15 @@ async function seed(db: Client) {
  * 공휴일은 `lib/holidays.ts`가 규칙으로 만들어 낸다.
  *
  * 규칙을 고쳤을 때 예전에 잘못 들어간 행이 남지 않도록 **통째로 갈아 끼운다.**
- * 다만 그것을 커넥션마다 하지는 않는다 — 서버리스에서는 콜드 스타트마다 400여 행을
- * 지우고 다시 쓰게 된다. 판 번호와 대상 연도를 적어 두고 달라졌을 때만 돈다.
+ * 여기까지 왔다는 것은 `createDb()`의 판 검사가 이미 "다시 돌아야 한다"고 판정한
+ * 것이므로, 이 함수는 판을 다시 보지 않는다. 지우기와 넣기를 `batch`로 묶어
+ * 왕복 한 번에 끝낸다 (120행을 하나씩 await하면 왕복이 120번이다).
  *
  * ⚠️ `holidays.ts`의 규칙을 고치면 `HOLIDAY_SEED_VERSION`을 올릴 것. 안 올리면
  *    이미 시드된 DB에는 새 규칙이 반영되지 않는다 (로컬은 `data/`를 지워도 된다).
  */
 async function seedHolidays(db: Client) {
   const thisYear = Number(today().slice(0, 4));
-  const stamp = `${HOLIDAY_SEED_VERSION}:${thisYear}-${thisYear + HOLIDAY_YEARS}`;
-
-  const current = (await db.execute({
-    sql: `SELECT value FROM meta WHERE key = 'holidays_seed'`,
-    args: [],
-  })).rows[0] as unknown as { value: string } | undefined;
-  if (current?.value === stamp) return;
-
   const holidays = buildHolidays(thisYear, thisYear + HOLIDAY_YEARS);
   await db.batch(
     [
@@ -479,11 +507,6 @@ async function seedHolidays(db: Client) {
         sql: `INSERT INTO holidays (date, name, kind) VALUES (?, ?, ?)`,
         args: [h.date, h.name, h.kind] as InArgs,
       })),
-      {
-        sql: `INSERT INTO meta (key, value) VALUES ('holidays_seed', ?)
-              ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-        args: [stamp] as InArgs,
-      },
     ],
     "write",
   );
