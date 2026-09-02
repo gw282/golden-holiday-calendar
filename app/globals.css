@@ -1,26 +1,101 @@
 @import "tailwindcss";
 
+/* 테마 색은 light-dark()로 (밝을 때, 어두울 때) 두 값을 한 줄에 같이 적는다.
+   팔레트를 두 벌 늘어놓고 한쪽만 고치는 사고를 막기 위한 것이다.
+   둘 중 어느 쪽을 쓸지는 아래 color-scheme이 정한다. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* data-theme이 없으면 OS 설정을 따른다.
+     color-scheme을 지정해야 <input type="date"> 같은 네이티브 위젯과 스크롤바까지
+     같이 어두워진다 — 이게 없으면 다크에서 날짜·시각 선택기만 하얗게 뜬다 */
+  color-scheme: light dark;
+
+  --background: light-dark(#f6f7f9, #0e1013);
+  --surface: light-dark(#ffffff, #171a1f);
+  --foreground: light-dark(#16181d, #e8eaed);
+  /* 라이트 값이 #6b7280이 아닌 이유: 쉬는 날 칸(--rest)과 고른 날 칸(--accent-soft) 위에
+     올라가면 대비가 4.47·4.23으로 떨어져 AA(4.5)를 못 넘긴다. 한 단계 낮춰 세 바탕
+     모두에서 4.5를 넘긴다. 흰 바탕만 보고 고르면 칸에 색이 깔리는 순간 걸린다 */
+  --muted: light-dark(#666d79, #9aa1ac);
+  --border: light-dark(#e3e6ea, #2a2f37);
+  /* 라이트를 한 단계 진하게 한 이유: 고른 날 칸(--accent-soft) 위에 accent 글자를
+     얹는 곳이 여럿인데(연도·월 칩, 연차 일수 칩) #2f6fed는 거기서 3.98로 AA를 못 넘겼다.
+     accent는 단추 배경으로도 쓰이는데 진해질수록 흰 글자 대비는 좋아지므로 손해가 없다 */
+  --accent: light-dark(#2a63d6, #6b9bff);
+  --accent-soft: light-dark(#eaf0fe, #1b2436);
+  /* accent 위에 얹는 글자색. 다크의 accent는 밝은 파랑이라 흰 글씨면 대비가 모자란다 */
+  --on-accent: light-dark(#ffffff, #0e1013);
+  /* 같은 이유로 라이트를 한 단계 진하게 (#dc2626은 쉬는 날 칸에서 4.46) */
+  --holiday: light-dark(#d11f1f, #f87171);
+  --saturday: light-dark(#2563eb, #7ba7ff);
+  --leave: light-dark(#b45309, #fbbf24);
+  --leave-soft: light-dark(#fef3c7, #3a2f12);
+  /* 쉬는 날(주말 + 공휴일) 칸 배경. surface 바로 옆 단계라 눈에 먼저 들어오지 않는다 —
+     읽어야 할 것은 일정이지 배경이 아니다. 이 정도로도 '쉬는 날 덩어리'와
+     그 사이에 낀 평일(= 연차 후보)이 형태로 구분된다 */
+  --rest: light-dark(#f4f6f9, #1b1f26);
+  /* 위에 떠 있는 판(툴팁·드롭다운) 배경.
+     라이트에서는 그림자가 판을 띄워 주지만 **다크에서는 검은 그림자가 검은 배경에 묻혀
+     보이지 않는다.** 그래서 다크에서는 surface보다 한 단계 밝게 만들어 밝기로 띄운다.
+     이게 없으면 툴팁이 바로 뒤 카드와 같은 색이라 1px 테두리만 남는다 */
+  --raised: light-dark(#ffffff, #242a33);
+}
+
+/* 사용자가 직접 고른 경우. ThemeToggle이 <html>에 data-theme을 붙였다 뗐다 한다.
+   떼면 위의 `light dark`로 돌아가므로 '시스템 설정'이 곧 속성 없음이다 */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-holiday: var(--holiday);
+  --color-saturday: var(--saturday);
+  --color-leave: var(--leave);
+  --color-leave-soft: var(--leave-soft);
+  --color-rest: var(--rest);
+  --color-raised: var(--raised);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* 로컬 전용 앱이라 웹폰트를 받지 않고 시스템 한글 폰트를 그대로 쓴다 */
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕",
+    system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* 추천 연차일을 달력에서 잠깐 깜빡여 어디인지 알려 준다.
+   3번 깜빡인 뒤에는 테두리만 남겨서 계속 눈에 띄되 거슬리지는 않게 한다. */
+@keyframes flash-day {
+  0%,
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 0 var(--leave);
+  }
+  50% {
+    background-color: var(--leave-soft);
+    box-shadow: inset 0 0 0 2px var(--leave);
+  }
+}
+
+.flash-day {
+  /* 깜빡인 뒤에도 어디였는지 남도록 테두리를 유지한다 */
+  box-shadow: inset 0 0 0 2px var(--leave);
+  animation: flash-day 800ms ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-day {
+    animation: none;
+  }
 }

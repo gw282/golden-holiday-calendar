@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 값이 비어 있는 안내용 견본이라 공유해도 된다
+!.env.local.example
 
 # vercel
 .vercel
@@ -39,3 +41,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# SQLite
+/data
+
+# 지우기로 한 파일들 — 삭제 권한이 없어 확장자만 바꿔 두었다.
+# gitignore에 넣어야 Tailwind가 훑지 않는다 (안 그러면 없앤 컴포넌트의 클래스가 되살아난다).
+*.removed
+
+# Stitch 스크래치 (디자인 시안 내려받기)
+.stitch-out/
+
+# 개인 설정 (훅 경로가 이 PC 기준이라 공유하지 않는다)
+.claude/settings.local.json
+
+# 배포용 꾸러미 (npm run package)
+dist/
+
+# Stitch 시안 작업용 임시 도구 (앱과 무관)
+.stitch.mjs
+.stitch.sh
+.prompt.txt

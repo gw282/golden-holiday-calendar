@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 황금연휴 캘린더
 
-## Getting Started
+연차를 **언제 쓰면 가장 오래 쉬는지** 찾아 주는 한 화면짜리 일정 관리 앱.
 
-First, run the development server:
+달력에서 아무 날이나 누르면 그 날이 들어가는 연휴 조합을 연차 사용일수(1·2·3일)별로 보여
+준다. 공휴일이 없는 주에도 "이 날 하루 쓰면 며칠 쉬나"가 나온다.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+연차 [1일] 쓰는 황금연휴 추천
+  [5일]  9/24(목) ~ 9/28(월)   연차 1일 · 9/28(월)      [연차 등록]
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 하는 일
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| | |
+| --- | --- |
+| **징검다리 연휴 추천** | 고른 날이 낀 연휴 조합을 연차 수별로. 이미 일정이 있는 날은 제외 |
+| **일정 관리** | 추가·수정·완료·삭제, 기간 일정, 반복, 색, 준비물 체크리스트 |
+| **공휴일** | 5년치를 **규칙으로 생성**. 음력(설·추석·석가탄신일)과 대체공휴일 포함 |
+| **휴가 잔고** | 종류마다 다른 주기 — 연차는 입사일 기준, 특별휴가는 연말 소멸 |
+| **시간 겹침** | 같은 날 겹치는 시각을 표시만 한다 (저장은 막지 않는다) |
+| **항공·숙소·환율** | 추천 연휴의 날짜가 채워진 검색 링크 + 환산액 |
+| **일정 챗봇** | "이번 주 뭐 있어?" — 도구로 실제 DB를 읽고 답한다 |
+| **구글 캘린더** | OAuth로 가져오기 (읽기 전용) |
+| **`.ics` 가져오기·내보내기** | 미리보기 → 확인 → 통째로 되돌리기 |
+| **온라인 / 오프라인** | 밖으로 나가는 기능을 한 번에 끈다 (폐쇄망용) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 스택
 
-## Learn More
+- **Next.js 16** (App Router, Turbopack, TypeScript) · **Tailwind CSS v4**
+- **SQLite — Node 24 내장 `node:sqlite`** (네이티브 빌드 없음)
+- 화면 상태(월·선택일·연차 수)는 전부 **URL 쿼리스트링**에 있어 달력에 클라이언트 JS가 없다
+- 챗봇만 Claude Agent SDK, 환율만 외부 API(`open.er-api.com`)
 
-To learn more about Next.js, take a look at the following resources:
+## 실행
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Node 24 이상**이 필요하다. 24 미만에서는 `node:sqlite`가 없어 뜨지 않는다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm install
+npm run dev            # http://localhost:3000
+npm run dev:lan        # 같은 망의 다른 기기에서도 접속 (0.0.0.0)
+```
 
-## Deploy on Vercel
+DB는 첫 실행에 `data/app.db`로 자동 생성되고 공휴일 5년치가 들어간다.
+초기화하려면 `data/` 폴더를 지우고 다시 띄우면 된다.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 배포 — 폴더 하나 복사
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run package        # → dist/  (약 28MB)
+```
+
+`dist/`를 통째로 옮기고 `시작.bat`(리눅스·맥은 `node server.js`)만 실행하면 된다.
+받는 쪽에 필요한 것은 **Node 24 하나**뿐이다 — `npm install`도 인터넷도 필요 없다.
+
+- 인터넷이 없는 곳에서 쓸 거면 `OFFLINE_DEFAULT=1`로 띄운다
+- 백업은 `data/app.db` 파일 하나 복사
+- `npm run package`는 **dev 서버가 떠 있으면 실패한다** (`.next`를 같이 쓰다 깨진다)
+
+> ⚠️ Vercel·Netlify에는 올릴 수 없다. 서버리스라 파일 시스템이 읽기 전용이고 인스턴스가
+> 요청마다 사라져서, **일정을 저장하는 순간 없어진다.** 영구 볼륨을 붙일 수 있는 곳
+> (Fly.io·Railway 등)이나 사내 서버에 올린다.
+
+## 구글 캘린더 (선택)
+
+없어도 나머지는 모두 동작한다.
+
+1. 구글 클라우드 콘솔 → **Google Calendar API** 사용 설정
+2. **OAuth 동의 화면** → 외부 → 테스트 사용자에 본인 계정 추가
+3. **사용자 인증 정보 → OAuth 클라이언트 ID → 웹 애플리케이션**
+   승인된 리디렉션 URI: `http://localhost:3000/api/google/callback`
+4. `.env.local.example`을 `.env.local`로 복사해 값을 채우고 서버 재시작
+
+권한은 **읽기 전용**(`calendar.readonly`)만 받는다. 반복 일정은 구글이 회차별로 펼쳐 준다.
+
+> 테스트 모드에서는 갱신 토큰이 **7일 뒤 만료**되어 다시 연결해야 한다. 이를 피하려면
+> 구글의 앱 확인(verification)을 받아야 한다.
+
+## 주의할 점
+
+- **로그인이 없다.** 접속한 사람이 곧 주인이다. `0.0.0.0`으로 열면 같은 망의 누구나
+  일정을 읽고 고칠 수 있고, **챗봇 요금도 서버를 띄운 계정에 붙는다.**
+- **선거일·임시공휴일은 규칙으로 만들 수 없다.** `lib/holidays.ts`의 `MANUAL_HOLIDAYS`에
+  손으로 넣어야 한다 (배포본에서는 못 넣는다 — 알려진 제약).
+- `.ics` 가져오기는 **반복 일정의 첫 회차만** 들어온다. 미리보기에서 주기를 직접 고르면
+  앱의 반복 기능으로 펼쳐진다.
+
+설계 판단과 그 이유는 [`CLAUDE.md`](./CLAUDE.md)에 정리되어 있다.
