@@ -47,7 +47,21 @@ export default function HelpButton() {
         {/* **화면을 보면 아는 것은 적지 않는다.** 달력을 누르면 그 날이 열린다거나,
             테마 단추가 테마를 바꾼다거나 하는 설명은 자리만 먹고 정작 필요한 줄을 가린다.
             여기 남는 것은 **화면에 드러나지 않는 규칙**뿐이다. */}
+        <div className="border-b border-border bg-accent-soft/40 px-4 py-3 text-xs">
+          <p className="font-semibold text-foreground">처음 시작하는 순서</p>
+          <p className="mt-1 leading-relaxed text-muted">
+            ① 달력에서 날짜 선택 → ② 오른쪽의 <span className="font-medium text-foreground">+ 추가</span> → ③ 제목과 날짜 입력 → ④ 저장.
+            등록한 일정은 선택한 날짜 오른쪽 목록에서 바로 관리합니다.
+          </p>
+        </div>
         <dl className="flex flex-col gap-3 p-4 text-xs">
+          <Row term="일정 등록">
+            제목과 시작일은 필수입니다. 종료일을 넣으면 기간 일정이 되고, 시간·메모·색은 필요할 때만 입력합니다.
+            반복 일정은 반복 횟수까지 정해 저장하세요.
+          </Row>
+          <Row term="완료·수정">
+            목록의 체크 표시로 완료를 바꾸고, 일정 항목의 수정 버튼에서 내용을 고칩니다. 삭제한 일정은 복구할 수 없습니다.
+          </Row>
           <Row term="휴가 잔고">
             <span className="text-foreground">연차는 입사일</span>부터 1년,{" "}
             <span className="text-foreground">특별휴가는 연말</span>에 사라집니다. 쓴 일수는 주말·공휴일을
@@ -70,6 +84,9 @@ export default function HelpButton() {
             <br />
             <span className="text-holiday">사라지는 것</span>은 밖에 닿아야 하는 넷입니다 —
             항공권·숙소 검색, 환율, 구글 캘린더, 챗봇.
+          </Row>
+          <Row term="회사 내부망">
+            설치한 PC에서 프로그램을 실행하면 그 PC의 일정 DB를 사용합니다. 다른 사내 PC에서 함께 보려면 설치한 PC의 사내 IP 주소로 접속해야 합니다.
           </Row>
           <Row term="단축키">
             <Kbd>←</Kbd> <Kbd>→</Kbd> 월 이동 · <Kbd>T</Kbd> 오늘 · <Kbd>N</Kbd> 새 일정 ·{" "}

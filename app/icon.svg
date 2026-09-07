@@ -10,12 +10,12 @@
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <!-- 몸통 -->
-  <rect x="3" y="6" width="26" height="23" rx="6" fill="#2a63d6" />
+  <rect x="3" y="6" width="26" height="23" rx="6" fill="#b7791f" />
   <!-- 머리띠. 아래쪽 모서리는 각지게 두려고 사각형을 겹쳐 덮는다 -->
-  <path d="M3 12a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v1H3z" fill="#1d4ed8" />
+  <path d="M3 12a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v1H3z" fill="#8c5a16" />
   <!-- 고리 둘 -->
-  <rect x="9" y="2" width="3" height="6" rx="1.5" fill="#1d4ed8" />
-  <rect x="20" y="2" width="3" height="6" rx="1.5" fill="#1d4ed8" />
+  <rect x="9" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
+  <rect x="20" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
   <!-- 날짜 칸. 가운데 한 칸만 노랑 = 연차 하루 -->
   <g fill="#ffffff" opacity="0.55">
     <rect x="8" y="17" width="4" height="4" rx="1.2" />
@@ -24,5 +24,5 @@
     <rect x="14" y="23" width="4" height="4" rx="1.2" />
     <rect x="20" y="23" width="4" height="4" rx="1.2" />
   </g>
-  <rect x="14" y="17" width="4" height="4" rx="1.2" fill="#f59e0b" />
+  <rect x="14" y="17" width="4" height="4" rx="1.2" fill="#ffd166" />
 </svg>

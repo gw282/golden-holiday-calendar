@@ -42,6 +42,7 @@ import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import OfflineToggle from "./components/OfflineToggle";
+import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
 export const dynamic = "force-dynamic";
@@ -326,6 +327,7 @@ export default async function Home(props: PageProps<"/">) {
     ) : null;
   return (
     <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-6">
+      <Onboarding />
       <Shortcuts prevHref={prevHref} nextHref={nextHref} todayHref={todayHref} />
       {/* 왼쪽에 제목과 도움말, 오른쪽에 검색. 부제(일정 · 공휴일 · 연차)는 지웠다 —
           화면을 보면 알 수 있는 말이고, 자세한 설명은 도움말이 맡는다 */}
@@ -342,7 +344,7 @@ export default async function Home(props: PageProps<"/">) {
 
           <HelpButton />
           <ThemeToggle />
-          <OfflineToggle offline={offline} />
+          <OfflineToggle offline={offline} locked={process.env.OFFLINE_DEFAULT === "1"} />
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다 */}
@@ -360,50 +362,47 @@ export default async function Home(props: PageProps<"/">) {
           위 칸이 커져 달력을 밀어낸다. 대신 개수를 UPCOMING_LIMIT으로 묶고
           제목은 잘라 넣는다. 나머지는 '+N건' 팝업이 맡는다. */}
       <div className="mb-4 grid gap-4 lg:grid-cols-12">
-        {upcoming.length > 0 && (
         <section className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-border bg-surface px-4 py-2 shadow-sm lg:col-span-7">
           <h2 className="shrink-0 text-xs font-semibold">
             다가오는 일정 <span className="font-normal text-muted">{upcoming.length}건</span>
           </h2>
-          {/* flex-1이 있어야 아래 '더보기'의 ml-auto가 밀어낼 여백이 생긴다.
-              없으면 ul이 내용 폭으로 줄어들어 더보기가 마지막 칩에 바짝 붙는다 */}
-          <ul className="flex min-w-0 flex-1 items-center gap-1.5">
-            {upcomingShown.map((e) => (
-              <li key={e.id} className="min-w-0">
-                <Link
-                  href={href({ month: monthOf(e.date), date: e.date })}
-                  scroll={false}
-                  title={e.title}
-                  className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs ring-1 ring-border hover:bg-accent-soft hover:ring-accent"
-                >
-                  {/* 달력의 띠와 같은 색. 어떤 일정인지 글자를 읽기 전에 알아본다 */}
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: colorHex(e.color) }}
+          {upcoming.length === 0 ? (
+            <p className="text-xs text-muted">앞으로 2주 안에 등록된 일정이 없습니다.</p>
+          ) : (
+            <ul className="flex min-w-0 flex-1 items-center gap-1.5">
+              {upcomingShown.map((e) => (
+                <li key={e.id} className="min-w-0">
+                  <Link
+                    href={href({ month: monthOf(e.date), date: e.date })}
+                    scroll={false}
+                    title={e.title}
+                    className="flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs ring-1 ring-border hover:bg-accent-soft hover:ring-accent"
+                  >
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: colorHex(e.color) }}
+                    />
+                    <span className="shrink-0 tabular-nums text-muted">
+                      {formatShortKo(e.date)}
+                      {e.endDate > e.date && ` ~ ${formatShortKo(e.endDate)}`}
+                    </span>
+                    <span className="truncate font-medium">{e.title}</span>
+                  </Link>
+                </li>
+              ))}
+              {upcoming.length > UPCOMING_LIMIT && (
+                <li className="ml-auto shrink-0">
+                  <UpcomingMoreButton
+                    events={upcoming}
+                    hiddenCount={upcoming.length - UPCOMING_LIMIT}
+                    days={UPCOMING_DAYS}
                   />
-                  <span className="shrink-0 tabular-nums text-muted">
-                    {formatShortKo(e.date)}
-                    {e.endDate > e.date && ` ~ ${formatShortKo(e.endDate)}`}
-                  </span>
-                  {/* 제목이 아주 긴 일정 하나가 줄을 통째로 차지하지 않도록 잘라 준다 */}
-                  <span className="truncate font-medium">{e.title}</span>
-                </Link>
-              </li>
-            ))}
-            {upcoming.length > UPCOMING_LIMIT && (
-              // 칸의 오른쪽 끝에 붙인다. 일정 옆에 바짝 붙어 있으면 일정 하나로 읽힌다
-              <li className="ml-auto shrink-0">
-                <UpcomingMoreButton
-                  events={upcoming}
-                  hiddenCount={upcoming.length - UPCOMING_LIMIT}
-                  days={UPCOMING_DAYS}
-                />
-              </li>
-            )}
-          </ul>
+                </li>
+              )}
+            </ul>
+          )}
         </section>
-        )}
 
         {/* 검색과 챗봇은 고른 날과 무관하게 전체를 훑는다. 그래서 '그 날 일정' 칸에 붙이지 않는다 —
             그 안에 있으면 결과까지 그 날 것으로 읽힌다 */}
@@ -704,10 +703,10 @@ export default async function Home(props: PageProps<"/">) {
 function AppMark() {
   return (
     <svg aria-hidden viewBox="0 0 32 32" className="h-[18px] w-[18px] shrink-0">
-      <rect x="3" y="6" width="26" height="23" rx="6" fill="#2a63d6" />
-      <path d="M3 12a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v1H3z" fill="#1d4ed8" />
-      <rect x="9" y="2" width="3" height="6" rx="1.5" fill="#1d4ed8" />
-      <rect x="20" y="2" width="3" height="6" rx="1.5" fill="#1d4ed8" />
+      <rect x="3" y="6" width="26" height="23" rx="6" fill="#b7791f" />
+      <path d="M3 12a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v1H3z" fill="#8c5a16" />
+      <rect x="9" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
+      <rect x="20" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
       <g fill="#ffffff" opacity="0.55">
         <rect x="8" y="17" width="4" height="4" rx="1.2" />
         <rect x="20" y="17" width="4" height="4" rx="1.2" />
@@ -716,7 +715,7 @@ function AppMark() {
         <rect x="20" y="23" width="4" height="4" rx="1.2" />
       </g>
       {/* 고른 하루 = 연차 */}
-      <rect x="14" y="17" width="4" height="4" rx="1.2" fill="#f59e0b" />
+      <rect x="14" y="17" width="4" height="4" rx="1.2" fill="#ffd166" />
     </svg>
   );
 }
