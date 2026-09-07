@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
  * 테마 토글처럼 아이콘 하나로 줄이지 않고 **글자를 남긴 이유**: 켜고 끄는 것이 무엇인지가
  * 아이콘으로는 전달되지 않는다. 지구본만 보고 '항공권이 사라진다'를 짐작할 사람은 없다.
  */
-export default function OfflineToggle({ offline }: { offline: boolean }) {
+export default function OfflineToggle({ offline, locked = false }: { offline: boolean; locked?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
@@ -37,6 +37,18 @@ export default function OfflineToggle({ offline }: { offline: boolean }) {
   }
 
   const online = !offline;
+
+  if (locked) {
+    return (
+      <span
+        title="회사 내부망용 오프라인 버전입니다"
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[11px] text-muted"
+      >
+        <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-border" />
+        오프라인
+      </span>
+    );
+  }
 
   return (
     <button

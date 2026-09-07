@@ -14,6 +14,8 @@ import { get, run } from "./db";
 
 /** 오프라인 모드인가 */
 export async function isOffline(): Promise<boolean> {
+  if (process.env.OFFLINE_DEFAULT === "1") return true;
+
   const row = await get<{ value: string }>(
     `SELECT value FROM app_settings WHERE key = 'offline'`,
   );
@@ -41,6 +43,8 @@ export function isChatEnabled(): boolean {
 }
 
 export async function setOffline(on: boolean): Promise<void> {
+  if (process.env.OFFLINE_DEFAULT === "1") return;
+
   await run(
     `INSERT INTO app_settings (key, value) VALUES ('offline', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,

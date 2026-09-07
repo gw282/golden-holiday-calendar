@@ -48,7 +48,7 @@ const SCHEMA_VERSION = 1;
  */
 const globalForDb = globalThis as unknown as { __appDb?: Promise<Client> };
 
-const DB_DIR = path.join(process.cwd(), "data");
+const DB_DIR = process.env.APP_DATA_DIR ?? path.join(process.cwd(), "data");
 const DB_PATH = path.join(DB_DIR, "app.db");
 
 /** 로컬 파일을 쓰는가 (= Turso가 아닌가). PRAGMA와 체크포인트가 여기서만 의미가 있다 */
@@ -456,34 +456,6 @@ async function seedLeaveTypes(db: Client) {
 
 async function seed(db: Client) {
   await seedHolidays(db);
-
-  // 일정: 비어 있을 때만 넣는다. 빈 화면으로 시작하지 않게 하는 용도.
-  const countRow = (await db.execute(`SELECT COUNT(*) AS n FROM events`)).rows[0] as unknown as {
-    n: number;
-  };
-  if (Number(countRow.n) > 0) return;
-
-  const t = today();
-  const sql = `INSERT INTO events (title, date, end_date, start_time, end_time, memo, done, color)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-
-  // [제목, 시작일, 종료일, 시작시각, 종료시각, 메모, 완료, 색]
-  const rows: Array<[string, string, string, string | null, string | null, string, number, string]> = [
-    ["팀 데일리 스크럼", t, t, "09:30", "09:45", "어제 한 일 / 오늘 할 일 공유", 1, "gray"],
-    ["Next.js + SQLite 과제 만들기", t, t, "14:00", "18:00", "Day 2: CLAUDE.md 초안과 첫 화면", 0, "blue"],
-    ["장보기", t, t, null, null, "우유, 계란, 커피 원두", 0, "green"],
-    ["치과 예약", addDays(t, 1), addDays(t, 1), "11:00", "12:00", "스케일링", 0, "red"],
-    ["코드 리뷰 마감", addDays(t, 2), addDays(t, 2), "18:00", null, "", 0, "red"],
-    ["워크숍 출장", addDays(t, 3), addDays(t, 5), null, null, "1박 2일 아니고 2박 3일", 0, "purple"],
-    ["부모님 생신", addDays(t, 5), addDays(t, 5), null, null, "선물 미리 준비", 0, "amber"],
-    ["분기 회고 문서 작성", addDays(t, 9), addDays(t, 9), "15:00", "16:30", "", 0, "blue"],
-    ["도서관 책 반납", addDays(t, -2), addDays(t, -2), null, null, "연체 중", 1, ""],
-  ];
-
-  await db.batch(
-    rows.map((r) => ({ sql, args: r as InArgs })),
-    "write",
-  );
 }
 
 /**
