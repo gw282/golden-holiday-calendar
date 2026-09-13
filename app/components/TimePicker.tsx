@@ -36,7 +36,6 @@ export default function TimePicker({
 
   useEffect(() => {
     if (!open) return;
-    setDraft(value);
     function onDocClick(e: MouseEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     }
@@ -49,7 +48,7 @@ export default function TimePicker({
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, value]);
+  }, [open]);
 
   // 열리면 지금 값(또는 가장 가까운 값) 자리로 스크롤해 매번 맨 위부터 훑지 않게 한다
   useEffect(() => {
@@ -67,7 +66,10 @@ export default function TimePicker({
     <div ref={rootRef} className="relative inline-block">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setDraft(value);
+          setOpen((o) => !o);
+        }}
         disabled={disabled}
         aria-label={ariaLabel}
         className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm text-foreground outline-none focus:border-accent disabled:opacity-40"

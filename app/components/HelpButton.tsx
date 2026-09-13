@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * 화면 전체 도움말.
@@ -11,12 +11,19 @@ import { useRef } from "react";
  */
 export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!dialog.current) return;
+    if (open) dialog.current.showModal();
+    else dialog.current.close();
+  }, [open]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => dialog.current?.showModal()}
+        onClick={() => setOpen((v) => !v)}
         aria-label="도움말"
         title="도움말"
         // 제목 옆에 붙어서 글자 크기에 따라 찌그러지지 않도록 정원(h=w)으로 고정한다
@@ -27,13 +34,14 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
 
       <dialog
         ref={dialog}
+        onClose={() => setOpen(false)}
         onClick={(e) => {
           if (e.target === dialog.current) dialog.current?.close();
         }}
         // 세로로도 vw/vh 기준 상한을 둔다 — 화면 확대(zoom)는 창 크기(vh)를 줄이지
         // 않아서, 내용이 창보다 커지면 아래쪽이 창 밖으로 밀려날 수 있다. 헤더는
         // 고정하고 본문만 스크롤되게 나눠서 어떤 배율에서도 끝까지 읽을 수 있게 한다.
-        className="m-auto flex max-h-[85vh] w-[min(30rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg backdrop:bg-black/40"
+        className="m-auto hidden max-h-[85vh] w-[min(30rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg open:flex backdrop:bg-black/40"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">도움말</h2>

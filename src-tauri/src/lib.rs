@@ -167,18 +167,21 @@ struct EventsResponse {
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 const BREAK_INTERVAL: Duration = Duration::from_secs(50 * 60);
-/// 시작 몇 분 전부터 알릴지
-const REMIND_BEFORE_MIN: i64 = 10;
+/// 시작 몇 분 전에 알릴지 — 한 일정에 여러 번(1시간 전, 15분 전) 각각 따로 알린다.
+const REMIND_THRESHOLDS_MIN: [i64; 2] = [60, 15];
 
-/// 일정 리마인더(시작 10분 전) + 50분 리프레시 알림.
+/// 일정 리마인더(시작 1시간 전 + 15분 전, 각각 한 번씩) + 50분 리프레시 알림.
 ///
 /// Next 서버가 이미 알고 있는 오늘 일정을 30초마다 `/api/events?date=`로 직접
 /// 찔러 본다 — 창(웹뷰)이 숨어 있어도 동작해야 하는 기능이라, 프런트에 기대지 않고
 /// Rust가 사이드카 서버를 직접 보는 쪽이 더 견고하다.
+///
+/// 알림 이력은 `(일정 id, 문턱값)` 쌍으로 남긴다 — 같은 일정이라도 1시간 전 알림과
+/// 15분 전 알림은 별개라 하나를 보냈다고 다른 하나를 건너뛰면 안 된다.
 fn run_notifier(app: &tauri::AppHandle) {
     use std::collections::HashSet;
 
-    let mut notified: HashSet<i64> = HashSet::new();
+    let mut notified: HashSet<(i64, i64)> = HashSet::new();
     let mut notified_date = String::new();
     let mut last_break = std::time::Instant::now();
 
@@ -195,18 +198,26 @@ fn run_notifier(app: &tauri::AppHandle) {
             let now_min = hhmm_to_min(&Local::now().format("%H:%M").to_string());
             for e in events {
                 let Some(start) = e.start_time.as_deref() else { continue };
-                if notified.contains(&e.id) {
+                let diff = hhmm_to_min(start) - now_min;
+                if diff < 0 {
                     continue;
                 }
-                let diff = hhmm_to_min(start) - now_min;
-                if (0..=REMIND_BEFORE_MIN).contains(&diff) {
+                for threshold in REMIND_THRESHOLDS_MIN {
+                    if diff > threshold || notified.contains(&(e.id, threshold)) {
+                        continue;
+                    }
+                    let when = if diff >= 60 {
+                        format!("{}시간 {}분", diff / 60, diff % 60)
+                    } else {
+                        format!("{diff}분")
+                    };
                     let _ = app
                         .notification()
                         .builder()
-                        .title("잠시 후 일정이 있습니다")
+                        .title(format!("{when} 후 일정이 있습니다"))
                         .body(format!("{start} — {}", e.title))
                         .show();
-                    notified.insert(e.id);
+                    notified.insert((e.id, threshold));
                 }
             }
         }

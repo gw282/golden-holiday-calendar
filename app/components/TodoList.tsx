@@ -11,29 +11,25 @@ type Todo = { id: string; text: string; done: boolean };
 const KEY = "local-todos";
 
 export default function TodoList() {
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [text, setText] = useState("");
-  // localStorage를 읽기 전에 빈 배열을 그대로 저장해 버리면 기존 내용이 지워진다.
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
+  const [todos, setTodos] = useState<Todo[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setTodos(JSON.parse(raw) as Todo[]);
+      return raw ? (JSON.parse(raw) as Todo[]) : [];
     } catch {
       // 손상된 값이거나 접근 불가 — 빈 목록으로 시작한다
+      return [];
     }
-    setLoaded(true);
-  }, []);
+  });
+  const [text, setText] = useState("");
 
   useEffect(() => {
-    if (!loaded) return;
     try {
       localStorage.setItem(KEY, JSON.stringify(todos));
     } catch {
       // 저장 실패해도 화면은 계속 쓴다
     }
-  }, [todos, loaded]);
+  }, [todos]);
 
   function add(e: FormEvent) {
     e.preventDefault();
