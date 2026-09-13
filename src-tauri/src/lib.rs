@@ -16,9 +16,15 @@ use serde::Deserialize;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, WindowEvent,
+    LogicalSize, Manager, WindowEvent,
 };
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
+
+/// 기본 창 크기. 미니 모드에서 되돌아올 때도 이 값을 쓴다 — 사용자가 직접 늘려 놓은
+/// 크기까지 기억하려면 상태를 따로 저장해야 하는데, 그 정도로 자주 쓰는 기능은 아니다.
+const DEFAULT_SIZE: (f64, f64) = (1440.0, 960.0);
+const MINI_SIZE: (f64, f64) = (360.0, 280.0);
 
 /// `CREATE_NO_WINDOW` — 이게 없으면 node.exe가 콘솔 창을 따로 하나 더 띄운다.
 /// 앱 자신은 위의 `windows_subsystem = "windows"`로 이미 숨겼지만, 그건 이 프로세스에만
@@ -33,7 +39,21 @@ const SERVER_PORT: &str = if cfg!(debug_assertions) { "3000" } else { "3210" };
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        // `--hidden` 인자로 켜면(자동 실행 시) 트레이에만 조용히 자리잡는다.
+        // 로그인 직후 창이 불쑥 뜨는 것보다 이쪽이 방해가 덜하다.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden".into()]),
+        ))
+        .invoke_handler(tauri::generate_handler![
+            set_opacity,
+            toggle_mini,
+            set_autostart,
+            get_autostart
+        ])
         .setup(|app| {
+            let hidden_start = std::env::args().any(|a| a == "--hidden");
+
             #[cfg(debug_assertions)]
             let url = tauri::WebviewUrl::External("http://localhost:3000".parse().unwrap());
 
@@ -79,9 +99,10 @@ pub fn run() {
 
             let window = tauri::WebviewWindowBuilder::new(app, "main", url)
                 .title("황금연휴 캘린더")
-                .inner_size(1440.0, 960.0)
+                .inner_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1)
                 .min_inner_size(960.0, 700.0)
                 .resizable(true)
+                .visible(!hidden_start)
                 .build()?;
 
             // ── 시스템 트레이 ──────────────────────────────────────────
@@ -151,6 +172,66 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Golden Holiday Calendar");
+}
+
+/// 창 반투명. Tauri에 이걸 위한 크로스플랫폼 API가 없어(진짜 픽셀 단위 투명
+/// `transparent: true`는 생성 시점에만 되고 실행 중엔 못 바꾼다) 레이어드 윈도우를
+/// Win32 API로 직접 다룬다. 이 창 전체를 흐리게 하는 것뿐이라, 이 앱 범위에서는
+/// 이 정도로 충분하다.
+#[cfg(windows)]
+#[tauri::command]
+fn set_opacity(window: tauri::WebviewWindow, value: f64) -> Result<(), String> {
+    use windows::Win32::Foundation::COLORREF;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetLayeredWindowAttributes, SetWindowLongPtrW, GWL_EXSTYLE,
+        LWA_ALPHA, WS_EX_LAYERED,
+    };
+
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    let alpha = (value.clamp(0.3, 1.0) * 255.0).round() as u8;
+    unsafe {
+        let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED.0 as isize);
+        SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn set_opacity(_window: tauri::WebviewWindow, _value: f64) -> Result<(), String> {
+    Err("이 플랫폼에서는 창 투명도를 지원하지 않습니다.".into())
+}
+
+/// 미니 모드 on/off. 최소 크기 제약도 같이 늦췄다 풀었다 해야 한다 — 안 그러면
+/// `min_inner_size(960, 700)`에 걸려 작은 크기로 줄어들지 않는다.
+#[tauri::command]
+fn toggle_mini(window: tauri::WebviewWindow, mini: bool) -> Result<(), String> {
+    let (min, target) = if mini {
+        ((300.0, 220.0), MINI_SIZE)
+    } else {
+        ((960.0, 700.0), DEFAULT_SIZE)
+    };
+    window
+        .set_min_size(Some(LogicalSize::new(min.0, min.1)))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_size(LogicalSize::new(target.0, target.1))
+        .map_err(|e| e.to_string())?;
+    window.set_always_on_top(mini).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mgr = app.autolaunch();
+    let result = if enabled { mgr.enable() } else { mgr.disable() };
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
 /// 배포본 사이드카 데이터 폴더이자, 아침 요약 발송 여부 같은 자잘한 상태 파일을

@@ -54,6 +54,7 @@ import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import OfflineToggle from "./components/OfflineToggle";
 import ReminderSettings from "./components/ReminderSettings";
+import DesktopControls from "./components/DesktopControls";
 import RecommendationToggle from "./components/RecommendationToggle";
 import Onboarding from "./components/Onboarding";
 
@@ -386,6 +387,9 @@ export default async function Home(props: PageProps<"/">) {
           {isDesktopApp() && (
             <ReminderSettings options={REMINDER_THRESHOLD_OPTIONS} selected={reminderThresholds} />
           )}
+          {/* 투명도·미니모드·자동실행 — window.__TAURI_INTERNALS__로 클라이언트에서
+              스스로 판단해 렌더링한다(서버 prop을 따로 안 내려도 된다) */}
+          <DesktopControls />
           {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 배지를 아예 안 띄운다 —
               사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 계속 밝힌다 */}
           {!isDesktopApp() && (
