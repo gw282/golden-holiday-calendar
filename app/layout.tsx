@@ -13,12 +13,16 @@ export const metadata: Metadata = {
  */
 const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
 
+/** 저장해 둔 화면 확대 배율도 같은 이유로 첫 페인트 전에 붙인다. ZoomToggle과 같은 "zoom" 키다 */
+const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(z==="125"||z==="150")document.documentElement.style.zoom=z+"%"}catch(e){}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // 위 스크립트가 서버 HTML에 없던 data-theme을 붙이므로 하이드레이션 경고를 끈다
     <html lang="ko" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: ZOOM_SCRIPT }} />
         {children}
       </body>
     </html>
