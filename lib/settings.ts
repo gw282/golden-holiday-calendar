@@ -63,3 +63,23 @@ export async function setOffline(on: boolean): Promise<void> {
     [on ? "1" : "0"],
   );
 }
+
+/**
+ * 황금연휴 추천을 볼 것인가 — 기본은 켜짐. 연차 계획을 이미 다 세운 사람에게는
+ * 매번 계산해 보여주는 추천이 그냥 화면을 차지하는 것일 수 있어 끌 수 있게 둔다.
+ * 꺼 두면 page.tsx가 계산 자체를 건너뛴다(감추기만 하는 게 아니라).
+ */
+export async function isRecommendationEnabled(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'recommendations'`,
+  );
+  return row ? row.value === "1" : true;
+}
+
+export async function setRecommendationEnabled(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('recommendations', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}

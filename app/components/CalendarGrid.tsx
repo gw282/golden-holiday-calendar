@@ -49,7 +49,7 @@ export default function CalendarGrid({
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
       <div className="flex border-b border-border">
-        <div aria-hidden style={{ width: WEEK_NUM_WIDTH }} className="shrink-0" />
+        <div aria-hidden style={{ width: WEEK_NUM_WIDTH }} className="week-num shrink-0" />
         <div className="grid flex-1 grid-cols-7">
           {WEEKDAYS.map((w, i) => (
             <div
@@ -75,7 +75,7 @@ export default function CalendarGrid({
             <div
               aria-hidden
               style={{ width: WEEK_NUM_WIDTH }}
-              className={`flex shrink-0 items-start justify-center pt-1.5 font-mono text-[10px] text-muted ${
+              className={`week-num flex shrink-0 items-start justify-center pt-1.5 font-mono text-[10px] text-muted ${
                 isLastWeek ? "" : "border-b border-border"
               }`}
             >

@@ -29,10 +29,10 @@
   --saturday: light-dark(#2563eb, #7ba7ff);
   --leave: light-dark(#b45309, #fbbf24);
   --leave-soft: light-dark(#fef3c7, #3a2f12);
-  /* 쉬는 날(주말 + 공휴일) 칸 배경. surface 바로 옆 단계라 눈에 먼저 들어오지 않는다 —
-     읽어야 할 것은 일정이지 배경이 아니다. 이 정도로도 '쉬는 날 덩어리'와
-     그 사이에 낀 평일(= 연차 후보)이 형태로 구분된다 */
-  --rest: light-dark(#f4f6f9, #1b1f26);
+  /* 쉬는 날(주말 + 공휴일) 칸 배경. 읽어야 할 것은 일정이지 배경이 아니라서 과하게
+     칠하진 않지만, 라이트에서 #f4f6f9는 surface(#ffffff)와 거의 안 갈려서 '쉬는 날
+     덩어리'가 잘 안 보인다는 지적을 받아 한 단계 더 진하게 했다 */
+  --rest: light-dark(#e9edf4, #1b1f26);
   /* 위에 떠 있는 판(툴팁·드롭다운) 배경.
      라이트에서는 그림자가 판을 띄워 주지만 **다크에서는 검은 그림자가 검은 배경에 묻혀
      보이지 않는다.** 그래서 다크에서는 surface보다 한 단계 밝게 만들어 밝기로 띄운다.
@@ -98,4 +98,10 @@ body {
   .flash-day {
     animation: none;
   }
+}
+
+/* 주차 표시는 취향이라 끌 수 있다. WeekNumToggle이 <html>에 data-week-num을 붙였다 뗀다 —
+   ThemeToggle과 같은 방식(진짜 상태는 속성 하나, React state로 복제하지 않는다) */
+html[data-week-num="off"] .week-num {
+  display: none;
 }

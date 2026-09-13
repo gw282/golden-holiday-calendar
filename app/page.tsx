@@ -11,7 +11,7 @@ import { collectCandidates } from "@/lib/bridge";
 import { busyDates, listEvents, listEventsByDate, timeConflictIds } from "@/lib/events";
 import { leaveSummaries } from "@/lib/leave";
 import { fxSnapshot } from "@/lib/fx";
-import { isChatEnabled, isDesktopApp, isOffline } from "@/lib/settings";
+import { isChatEnabled, isDesktopApp, isOffline, isRecommendationEnabled } from "@/lib/settings";
 import { isConfigured as googleConfigured } from "@/lib/google";
 import {
   addDays,
@@ -40,11 +40,13 @@ import HelpButton from "./components/HelpButton";
 import Hint from "./components/Hint";
 import ThemeToggle from "./components/ThemeToggle";
 import ZoomToggle from "./components/ZoomToggle";
+import WeekNumToggle from "./components/WeekNumToggle";
 import OmniSearch from "./components/OmniSearch";
 import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import OfflineToggle from "./components/OfflineToggle";
+import RecommendationToggle from "./components/RecommendationToggle";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -131,6 +133,10 @@ export default async function Home(props: PageProps<"/">) {
   const doneCount = dayEvents.filter((e) => e.done).length;
   const selectedHoliday = await getHoliday(selected);
 
+  // 연휴 추천을 꺼 뒀으면 계산 자체를 건너뛴다 — 감추기만 하면 매번 후보를 만드느라
+  // 계산은 그대로 도는데, 이건 쓰지도 않을 결과를 매번 만드는 셈이다.
+  const recsEnabled = await isRecommendationEnabled();
+
   // 고른 날이 **들어가는** 연휴 조합. 공휴일이 아니어도 된다 —
   // 평일을 골라도 "이 날을 연차로 쓰면 어떻게 되나"가 바로 나온다.
   // 조합이 하나도 없으면 아무것도 그리지 않는다.
@@ -156,7 +162,7 @@ export default async function Home(props: PageProps<"/">) {
           (a.start < b.start ? -1 : 1),
       );
 
-  const withHolidays = dayFrom <= dayTo ? await pickFor(false) : [];
+  const withHolidays = recsEnabled && dayFrom <= dayTo ? await pickFor(false) : [];
   /**
    * 공휴일을 낀 조합이 하나도 없는 날 — 5월이나 11월처럼 공휴일이 비는 달이 실제로 있다.
    * 그럴 때 아무것도 안 그리면 "이 날 연차 쓰면 어떻게 되나"라는 질문 자체에 답을 못 한다.
@@ -166,7 +172,8 @@ export default async function Home(props: PageProps<"/">) {
    * 다만 그건 '황금연휴'가 아니라 그냥 주말 늘리기라, 아래에서 제목을 달리 붙인다.
    */
   const holidayFree = withHolidays.length === 0;
-  const dayPicks = holidayFree && dayFrom <= dayTo ? await pickFor(true) : withHolidays;
+  const dayPicks =
+    recsEnabled && holidayFree && dayFrom <= dayTo ? await pickFor(true) : withHolidays;
 
   // 항상 연차 수 하나를 고른 상태로 둔다. 기본은 가장 적게 쓰는 쪽.
   const leaveCounts = [...new Set(dayPicks.map((c) => c.leaveCount))].sort((a, b) => a - b);
@@ -355,13 +362,19 @@ export default async function Home(props: PageProps<"/">) {
           <Hint text="연차 하루를 놓아 연휴를 건넙니다. 달력에서 날짜를 고르면 오른쪽에 그 날이 낀 연휴 조합이 나옵니다.">
             <h1 className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
               <AppMark />
-              황금연휴 캘린더
+              {/* 연휴 추천을 꺼 두면 '황금연휴'라는 이름이 사실과 안 맞는다 —
+                  그 기능이 이름의 근거이기 때문이다 */}
+              {recsEnabled ? "황금연휴 캘린더" : "캘린더"}
             </h1>
           </Hint>
 
           <HelpButton desktop={isDesktopApp()} />
           <ZoomToggle />
           <ThemeToggle />
+          {/* 켜고/끄는 알약 단추들은 한데 모은다 — 크기·모양이 같아서 따로 두면
+              같은 무리라는 게 안 보인다 */}
+          <WeekNumToggle />
+          <RecommendationToggle enabled={recsEnabled} />
           {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 배지를 아예 안 띄운다 —
               사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 계속 밝힌다 */}
           {!isDesktopApp() && (
@@ -654,7 +667,7 @@ export default async function Home(props: PageProps<"/">) {
             {/* 고른 날이 들어가는 연휴 조합. 없으면 이 블록 자체가 안 그려진다 */}
             {/* 추천이 비는 이유가 "이미 그 날 일정이 있어서"일 때만. 이 규칙은 화면에
                 드러나지 않아 안 적으면 왜 사라졌는지 알 길이 없다 — 대신 짧게 적는다 */}
-            {dayRows.length === 0 && busy.has(selected) && (
+            {recsEnabled && dayRows.length === 0 && busy.has(selected) && (
               <p className="border-b border-border px-4 py-2 text-[11px] text-muted">
                 일정이 있는 날이라 연차 추천은 건너뜁니다
               </p>
@@ -716,8 +729,9 @@ export default async function Home(props: PageProps<"/">) {
         {/* 직원 개인이 혼자 쓰려고 만든 비공식 도구라는 점을 로고 옆에 못박아 둔다.
             회사가 만든 것으로 오해되면 안 되기 때문이다 */}
         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted opacity-70">
-          <img src="/mg-logo.png" alt="MG새마을금고" className="h-4 w-auto" />
-          개인 제작 · 비공식 도구
+          {/* 로고 이미지는 실제 중앙회 로고 파일을 받으면 이 자리에 교체할 것 */}
+          <img src="/mg-logo.png" alt="로고" className="h-4 w-auto" />
+          개인이 만든 사내용 도구
         </span>
       </footer>
     </main>

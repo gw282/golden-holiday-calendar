@@ -13,8 +13,15 @@ export const metadata: Metadata = {
  */
 const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
 
-/** 저장해 둔 화면 확대 배율도 같은 이유로 첫 페인트 전에 붙인다. ZoomToggle과 같은 "zoom" 키다 */
-const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(z==="125"||z==="150")document.documentElement.style.zoom=z+"%"}catch(e){}`;
+/**
+ * 저장해 둔 화면 확대 배율도 같은 이유로 첫 페인트 전에 붙인다. ZoomToggle과 같은 "zoom" 키다.
+ * 화이트리스트는 ZoomToggle.tsx의 ZOOM_LEVELS와 같은 값이어야 한다 — 임의 문자열이
+ * 그대로 CSS에 꽂히지 않도록 여기서도 한 번 더 허용 목록으로 막는다.
+ */
+const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(["50","75","125","150","175","200"].indexOf(z)>=0)document.documentElement.style.zoom=z+"%"}catch(e){}`;
+
+/** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. WeekNumToggle과 같은 "weekNum" 키다 */
+const WEEK_NUM_SCRIPT = `try{if(localStorage.getItem("weekNum")==="off")document.documentElement.dataset.weekNum="off"}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -23,6 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col">
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: ZOOM_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: WEEK_NUM_SCRIPT }} />
         {children}
       </body>
     </html>

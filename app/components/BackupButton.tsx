@@ -177,7 +177,9 @@ export default function BackupButton() {
           if (e.target === dialog.current) dialog.current?.close();
         }}
         aria-labelledby="ics-title"
-        className="m-auto w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-0 text-left text-foreground shadow-xl backdrop:bg-black/50"
+        // 최소 높이를 둔다 — 기간 필터로 걸러 0건이 되면 목록이 비어 창이 확 줄어드는데,
+        // 그 안의 DatePicker 팝오버(달력)는 그보다 커서 줄어든 창 아래로 잘려 보인다.
+        className="m-auto min-h-[26rem] w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-0 text-left text-foreground shadow-xl backdrop:bg-black/50"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 id="ics-title" className="text-sm font-semibold">

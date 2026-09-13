@@ -13,7 +13,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+# 로컬 서버(127.0.0.1)만 찌르는 동기 폴링이라 tokio 비동기 스택 없이 가벼운 동기 클라이언트로 충분하다
+ureq = { version = "2", default-features = false, features = ["json"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [features]
 default = ["custom-protocol"]

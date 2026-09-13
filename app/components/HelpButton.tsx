@@ -30,9 +30,12 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
         onClick={(e) => {
           if (e.target === dialog.current) dialog.current?.close();
         }}
-        className="m-auto w-[min(30rem,calc(100vw-2rem))] rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg backdrop:bg-black/40"
+        // 세로로도 vw/vh 기준 상한을 둔다 — 화면 확대(zoom)는 창 크기(vh)를 줄이지
+        // 않아서, 내용이 창보다 커지면 아래쪽이 창 밖으로 밀려날 수 있다. 헤더는
+        // 고정하고 본문만 스크롤되게 나눠서 어떤 배율에서도 끝까지 읽을 수 있게 한다.
+        className="m-auto flex max-h-[85vh] w-[min(30rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg backdrop:bg-black/40"
       >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">도움말</h2>
           <button
             type="button"
@@ -44,17 +47,19 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
           </button>
         </div>
 
-        {/* **화면을 보면 아는 것은 적지 않는다.** 달력을 누르면 그 날이 열린다거나,
-            테마 단추가 테마를 바꾼다거나 하는 설명은 자리만 먹고 정작 필요한 줄을 가린다.
-            여기 남는 것은 **화면에 드러나지 않는 규칙**뿐이다. */}
-        <div className="border-b border-border bg-accent-soft/40 px-4 py-3 text-xs">
-          <p className="font-semibold text-foreground">처음 시작하는 순서</p>
-          <p className="mt-1 leading-relaxed text-muted">
-            ① 달력에서 날짜 선택 → ② 오른쪽의 <span className="font-medium text-foreground">+ 추가</span> → ③ 제목과 날짜 입력 → ④ 저장.
-            등록한 일정은 선택한 날짜 오른쪽 목록에서 바로 관리합니다.
-          </p>
-        </div>
-        <dl className="flex flex-col gap-3 p-4 text-xs">
+        <div className="min-h-0 overflow-y-auto">
+          {/* **화면을 보면 아는 것은 적지 않는다.** 달력을 누르면 그 날이 열린다거나,
+              테마 단추가 테마를 바꾼다거나 하는 설명은 자리만 먹고 정작 필요한 줄을 가린다.
+              여기 남는 것은 **화면에 드러나지 않는 규칙**뿐이다. */}
+          <div className="border-b border-border bg-accent-soft/40 px-4 py-3 text-xs">
+            <p className="font-semibold text-foreground">처음 시작하는 순서</p>
+            <p className="mt-1 leading-relaxed text-muted">
+              ① 달력에서 날짜 선택 → ② 오른쪽의{" "}
+              <span className="font-medium text-foreground">+ 추가</span> → ③ 제목과 날짜 입력 →
+              ④ 저장. 등록한 일정은 선택한 날짜 오른쪽 목록에서 바로 관리합니다.
+            </p>
+          </div>
+          <dl className="flex flex-col gap-3 p-4 text-xs">
           <Row term="일정 등록">
             제목과 시작일은 필수입니다. 종료일을 넣으면 기간 일정이 되고, 시간·메모·색은 필요할 때만 입력합니다.
             반복 일정은 <span className="text-foreground">횟수</span> 또는{" "}
@@ -83,7 +88,8 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             공휴일이 없는 주에도 아무 날이나 눌러 보세요. 이미 하루 종일 일정이 있는 날은 빠집니다.
           </Row>
           <Row term="달력 왼쪽 숫자·색 배지">
-            맨 왼쪽 작은 숫자는 <span className="text-foreground">그 주의 몇 번째 주</span>인지입니다.
+            맨 왼쪽 작은 숫자는 <span className="text-foreground">그 주의 몇 번째 주</span>인지이며
+            헤더의 <span className="text-foreground">주차</span> 단추로 껐다 켤 수 있습니다.
             날짜 칸의 색 배지는 급여일 같은 <span className="text-foreground">회사 고정 일정</span>이라
             직접 등록·수정할 수 없습니다.
           </Row>
@@ -91,13 +97,11 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             제목·메모로 찾거나, <span className="text-foreground">초성만 쳐도</span>{" "}
             (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의) 찾아집니다.
           </Row>
-          <Row term="이번 주 복사">
-            일정 칸 위쪽 <span className="text-foreground">주간 복사</span> 단추를 누르면 이번 주
-            일정이 업무 보고용 줄글로 클립보드에 복사됩니다.
-          </Row>
+          {/* '주간 복사' 단추는 자기 tooltip이 이미 다 설명해서 여기 또 안 적는다 —
+              화면을 보면 아는 것은 적지 않는다는 이 도움말의 원칙 그대로다 */}
           <Row term="화면 확대">
-            헤더의 <span className="text-foreground">100% / 125% / 150%</span> 단추로 글자·칸이
-            전체적으로 커집니다. 모니터가 작거나 글씨가 작게 느껴질 때 눌러 보세요.
+            헤더의 <span className="text-foreground">%</span> 단추, 또는{" "}
+            <span className="text-foreground">Ctrl + 마우스 휠</span>로도 조정됩니다.
           </Row>
           <Row term="항공·숙소">
             추천이 여러 줄이면 <span className="text-accent">파랗게 표시된 줄</span> 기준입니다.
@@ -132,7 +136,8 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             <br />
             나머지는 글자에 커서를 <span className="text-foreground">2초</span> 올려 두면 뜹니다.
           </Row>
-        </dl>
+          </dl>
+        </div>
       </dialog>
     </>
   );
