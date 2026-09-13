@@ -55,7 +55,7 @@ pub fn run() {
             };
 
             tauri::WebviewWindowBuilder::new(app, "main", url)
-                .title("Golden Holiday Calendar")
+                .title("황금연휴 캘린더")
                 .inner_size(1440.0, 960.0)
                 .min_inner_size(960.0, 700.0)
                 .resizable(true)
@@ -71,6 +71,6 @@ fn app_data_dir() -> std::path::PathBuf {
     std::env::var_os("APPDATA")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("Golden Holiday Calendar")
+        .join("황금연휴 캘린더")
         .join("data")
 }

@@ -20,7 +20,7 @@
   },
   "build": {
     "appId": "com.goldenholidaycalendar.desktop",
-    "productName": "Golden Holiday Calendar",
+    "productName": "황금연휴 캘린더",
     "directories": {
       "output": "release-desktop"
     },
