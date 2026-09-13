@@ -67,7 +67,10 @@ app/
   api/leave/route.ts             GET / PUT — 연차 총 일수
   api/holidays/route.ts          GET — 공휴일 **날짜만**. 팝업이 연차 일수를 세는 데 쓴다
   ../proxy.ts                    APP_PASSWORD가 있을 때만 켜지는 HTTP Basic 문 (Next 16)
-  components/CalendarGrid.tsx    Server Component — 셀이 전부 링크라 클라이언트 JS가 없다
+  components/CalendarGrid.tsx    Server Component — 월/주 레이아웃은 서버에서, 셀만
+                                  DayCellInteractive로 감싼다 (더블클릭 메모 때문)
+  components/DayCellInteractive.tsx 'use client' — 셀 하나. 더블클릭 메모 팝업 + 메모 점 표시
+  components/localNotes.ts       'use client' — 날짜별 한 줄 메모, localStorage (서버 미참조)
   components/ThemeToggle.tsx     'use client' — 시스템 → 라이트 → 다크 순환
   components/LeaveBudgetButton.tsx 'use client' — 연차 잔고 표시 + 총 일수 입력
   components/TripQuickLinks.tsx  'use client' — 추천 아래 항공권·숙소 링크 + 환산 한 줄
@@ -79,6 +82,7 @@ app/
   components/EventList.tsx       'use client' — 목록
   components/EventItem.tsx       'use client' — 완료 토글 / 삭제 / 수정 버튼
   components/CopyWeekButton.tsx  'use client' — 고른 날이 속한 주를 업무보고 텍스트로 복사
+  components/TodoList.tsx        'use client' — 서버 없는 체크리스트, localStorage
 lib/
   db.ts                 getDb() — DatabaseSync 싱글턴 + 스키마 + 시드
   events.ts             쿼리 모음 (list/create/update/delete) + 입력 검증 + busyDates
@@ -101,7 +105,8 @@ data/app.db             SQLite 파일 (gitignore, 첫 실행 시 자동 생성·
 `holidays.ts`는 생성기로만 남겨 두고 DB 조회는 `calendar.ts`가 맡는다.
 
 화면 상태(`month` `date` `lv` `hl`)는 전부 **URL 쿼리스트링**에 있다.
-그래서 날짜 셀·월 이동·공휴일 탐색·연차 수 선택이 모두 `<Link>`이고, 달력에는 클라이언트 JS가 없다.
+그래서 날짜 셀·월 이동·공휴일 탐색·연차 수 선택이 모두 `<Link>`이다. 달력 레이아웃 자체엔
+클라이언트 JS가 없고, 셀 더블클릭 메모(`DayCellInteractive`)만 예외로 얇게 걸려 있다.
 연도 접기는 URL도 쓰지 않는다 — 브라우저 기본 `<details>`다.
 
 ## 규칙
