@@ -32,7 +32,7 @@ const HOLIDAY_SEED_VERSION = 1;
  * 판이 같으면 DDL을 통째로 건너뛴다. 정상 상태에서 초기화 비용은 왕복 **두 번**이다
  * (meta 표 보장 + 판 읽기).
  */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * DB 커넥션 싱글턴.
