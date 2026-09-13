@@ -90,7 +90,7 @@ export default function ZoomToggle() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title="화면 확대"
+        title="화면 확대 (Ctrl + 마우스 휠로도 조정됩니다)"
         aria-label={`화면 확대 ${zoom}%`}
         className="flex h-5 shrink-0 items-center rounded-full border border-border px-1.5 text-[10px] font-medium leading-none tabular-nums text-muted hover:border-accent hover:bg-accent-soft hover:text-accent"
       >

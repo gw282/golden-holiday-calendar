@@ -234,7 +234,7 @@ export default function EventItem({
         <button
           onClick={() => shiftDate(-1)}
           disabled={dimmed}
-          title={`하루 당기기 — 날짜를 하루 앞으로${shiftHint}`}
+          title={`하루 당기기 — 날짜를 하루 앞으로 옮기고 화면도 그 날로 이동${shiftHint}`}
           aria-label={`${event.title} 하루 당기기`}
           className="rounded-md px-1.5 py-1 text-[11px] text-muted hover:bg-accent-soft hover:text-accent"
         >
@@ -243,7 +243,7 @@ export default function EventItem({
         <button
           onClick={() => shiftDate(1)}
           disabled={dimmed}
-          title={`하루 미루기 — 날짜를 하루 뒤로${shiftHint}`}
+          title={`하루 미루기 — 날짜를 하루 뒤로 옮기고 화면도 그 날로 이동${shiftHint}`}
           aria-label={`${event.title} 하루 미루기`}
           className="rounded-md px-1.5 py-1 text-[11px] text-muted hover:bg-accent-soft hover:text-accent"
         >

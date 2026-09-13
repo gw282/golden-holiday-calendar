@@ -68,24 +68,14 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             </p>
           </div>
           <dl className="flex flex-col gap-3 p-4 text-xs">
+          {/* 화면 곳곳의 단추·아이콘에 이미 붙어 있는 것(더블클릭 메모, 화면 확대,
+              주차 표시, 색 배지 등)은 여기 또 안 적는다 — 커서를 2초 올려 두면
+              그 자리에서 바로 뜬다. 여기 남는 것은 **어느 한 단추에도 안 걸리는
+              전체 규칙**뿐이다. */}
           <Row term="일정 등록">
-            제목과 시작일은 필수입니다. 종료일을 넣으면 기간 일정이 되고, 시간·메모·색은 필요할 때만 입력합니다.
-            반복 일정은 <span className="text-foreground">횟수</span> 또는{" "}
+            제목과 시작일은 필수입니다. 반복 일정은{" "}
+            <span className="text-foreground">횟수</span> 또는{" "}
             <span className="text-foreground">종료일까지</span> 중 골라 저장하세요.
-          </Row>
-          <Row term="완료·수정·날짜 이동">
-            목록의 체크 표시로 완료를 바꾸고, 수정 버튼에서 내용을 고칩니다.
-            <span className="text-foreground">−1일 / +1일</span> 단추를 누르면 화면이 옮긴 날짜를
-            그대로 따라갑니다. 삭제한 일정은 복구할 수 없습니다.
-          </Row>
-          <Row term="날짜 더블클릭 메모">
-            달력의 날짜를 더블클릭하면 그 날만을 위한 짧은 메모를 남길 수 있습니다.{" "}
-            <span className="text-foreground">이 PC에만 저장</span>되며(서버·다른 기기와 공유되지
-            않음), 메모가 있는 날엔 모서리에 작은 점이 뜹니다.
-          </Row>
-          <Row term="오늘 할 일">
-            달력 아래 체크리스트는 등록 절차 없이 바로 쓰는 낙서장입니다. 마찬가지로{" "}
-            <span className="text-foreground">이 PC에만</span> 저장됩니다.
           </Row>
           <Row term="휴가 잔고">
             <span className="text-foreground">연차는 입사일</span>부터 1년,{" "}
@@ -95,21 +85,9 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
           <Row term="연휴 추천">
             공휴일이 없는 주에도 아무 날이나 눌러 보세요. 이미 하루 종일 일정이 있는 날은 빠집니다.
           </Row>
-          <Row term="달력 왼쪽 숫자·색 배지">
-            맨 왼쪽 작은 숫자는 <span className="text-foreground">그 주의 몇 번째 주</span>인지이며
-            헤더의 <span className="text-foreground">주차</span> 단추로 껐다 켤 수 있습니다.
-            날짜 칸의 색 배지는 급여일 같은 <span className="text-foreground">회사 고정 일정</span>이라
-            직접 등록·수정할 수 없습니다.
-          </Row>
           <Row term="검색">
-            제목·메모로 찾거나, <span className="text-foreground">초성만 쳐도</span>{" "}
+            <span className="text-foreground">초성만 쳐도</span>{" "}
             (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의) 찾아집니다.
-          </Row>
-          {/* '주간 복사' 단추는 자기 tooltip이 이미 다 설명해서 여기 또 안 적는다 —
-              화면을 보면 아는 것은 적지 않는다는 이 도움말의 원칙 그대로다 */}
-          <Row term="화면 확대">
-            헤더의 <span className="text-foreground">%</span> 단추, 또는{" "}
-            <span className="text-foreground">Ctrl + 마우스 휠</span>로도 조정됩니다.
           </Row>
           <Row term="항공·숙소">
             추천이 여러 줄이면 <span className="text-accent">파랗게 표시된 줄</span> 기준입니다.

@@ -59,7 +59,11 @@ export default function DayCellInteractive({
         // 더블클릭은 그 앞의 클릭 두 번이 이미 이 날짜로 이동시킨 뒤에 온다 —
         // 같은 날짜를 다시 골라 화면이 안 바뀌므로 막을 필요가 없다.
         onDoubleClick={openMemo}
-        title={noted ? "더블클릭: 메모 보기·수정" : "더블클릭: 메모 남기기"}
+        title={
+          noted
+            ? "더블클릭: 메모 보기·수정 (이 PC에만 저장)"
+            : "더블클릭: 메모 남기기 (이 PC에만 저장, 서버에 안 올라감)"
+        }
         style={style}
         className={`relative ${className}`}
       >

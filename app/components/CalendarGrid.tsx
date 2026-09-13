@@ -248,11 +248,13 @@ function Cell({
         <span className="truncate text-[10px] leading-tight text-holiday">{day.holiday.name}</span>
       )}
 
-      {/* DB 이벤트가 아니라 순수 표시용이라 색은 이 자리에서만 hex로 직접 준다 */}
+      {/* DB 이벤트가 아니라 순수 표시용이라 색은 이 자리에서만 hex로 직접 준다.
+          title로 "왜 못 고치지"에 미리 답해 둔다 — 직접 등록·수정할 길이 없다 */}
       {day.milestone && (
         <span
           className="truncate text-[10px] leading-tight"
           style={{ color: day.milestone.color }}
+          title={`${day.milestone.title} — 회사 고정 일정이라 직접 등록·수정할 수 없습니다`}
         >
           {day.milestone.title}
         </span>
