@@ -27,6 +27,7 @@ function toValues(event: Event): EventFieldValues {
     // null은 '자동'이라 칸을 비워 둔다. 자동값을 적어 넣으면 직접 입력으로 굳어 버려서
     // 나중에 날짜를 옮겨도 옛 숫자가 따라다닌다.
     leaveDays: event.leaveDays === null ? "" : String(event.leaveDays),
+    reminderMinutes: event.reminderMinutes === null ? "" : String(event.reminderMinutes),
   };
 }
 
@@ -79,6 +80,7 @@ export default function EventEditButton({
           isLeave: values.isLeave,
           leaveTypeId: values.leaveTypeId ? Number(values.leaveTypeId) : null,
           leaveDays: values.leaveDays === "" ? null : Number(values.leaveDays),
+          reminderMinutes: values.reminderMinutes === "" ? null : Number(values.reminderMinutes),
         }),
       });
 

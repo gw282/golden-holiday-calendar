@@ -254,6 +254,11 @@ async function migrate(db: Client) {
   }
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_events_import_batch
            ON events(import_batch_id) WHERE import_batch_id IS NOT NULL`);
+  // 이 일정 하나만 몇 분 전에 알릴지(설치본 알림 전용). NULL이면 헤더의 전역
+  // '알림 시점' 설정을 그대로 따른다 — 대부분의 일정은 굳이 따로 정할 이유가 없다.
+  if (!columns.some((c) => c.name === "reminder_minutes")) {
+    await db.execute(`ALTER TABLE events ADD COLUMN reminder_minutes INTEGER`);
+  }
 
   // 하루짜리 일정은 end_date를 시작일과 같게 둔다. 그래야 'date <= d <= end_date' 한 조건으로 끝난다.
   await db.execute(`UPDATE events SET end_date = date WHERE end_date = '' OR end_date IS NULL`);

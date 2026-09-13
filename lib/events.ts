@@ -1,6 +1,7 @@
 import { all, get, run, batch } from "./db";
 import { addDays, diffDays, eachDay, isValidDateStr, minutesOf, type DateStr } from "./date";
 import { isEventColorKey } from "./eventColors";
+import { REMINDER_THRESHOLD_OPTIONS } from "./settings";
 
 export type EventRow = {
   id: number;
@@ -18,6 +19,7 @@ export type EventRow = {
   leave_days: number | null;
   google_id: string;
   import_batch_id: number | null;
+  reminder_minutes: number | null;
   created_at: string;
   /** 준비물 개수 — 표에 있는 열이 아니라 SELECT가 세어 붙이는 값이다 */
   tasks_total?: number;
@@ -62,6 +64,11 @@ export type Event = {
   googleId: string;
   /** 한 번의 가져오기로 들어왔으면 그 번호. 통째로 되돌릴 때 쓴다 */
   importBatchId: number | null;
+  /**
+   * 이 일정만 몇 분 전에 알릴지(설치본 알림 전용). null이면 헤더의 전역
+   * '알림 시점' 설정(`lib/settings.ts`의 `getReminderThresholds`)을 그대로 따른다.
+   */
+  reminderMinutes: number | null;
   createdAt: string;
   /** 딸린 준비물 개수. 목록에 `준비물 2/5`를 적는 데 쓴다 */
   tasksTotal: number;
@@ -93,6 +100,10 @@ function toEvent(r: EventRow): Event {
       r.import_batch_id === null || r.import_batch_id === undefined
         ? null
         : Number(r.import_batch_id),
+    reminderMinutes:
+      r.reminder_minutes === null || r.reminder_minutes === undefined
+        ? null
+        : Number(r.reminder_minutes),
     createdAt: r.created_at,
     tasksTotal: r.tasks_total ?? 0,
     tasksDone: r.tasks_done ?? 0,
@@ -174,6 +185,11 @@ export type CreateInput = {
    */
   done?: boolean;
   /**
+   * 이 일정만 몇 분 전에 알릴지. 비우면(null/undefined) 전역 설정을 따른다.
+   * `lib/settings.ts`의 `REMINDER_THRESHOLD_OPTIONS`에 있는 값만 받는다.
+   */
+  reminderMinutes?: number | null;
+  /**
    * 구글 캘린더 원본 id. **동기화 전용**이다 — 화면에서 만들 때는 비운다.
    * 값이 있으면 그 일정은 구글이 주인이라, 다음 동기화 때 이쪽 수정이 덮인다.
    */
@@ -205,6 +221,22 @@ function normalizeColor(v: unknown): string {
   if (v === undefined || v === null || v === "") return "";
   if (!isEventColorKey(v)) throw new ValidationError("색이 올바르지 않습니다.");
   return v as string;
+}
+
+/**
+ * 비어 있으면 null(= 전역 알림 설정을 따름). 0이면 이 일정만 알림을 아예 끈 것 —
+ * 전역 설정과 무관하게 이 일정에는 알림을 보내지 않는다. 그 외엔 정해진
+ * 선택지(15/30/60/120분)만 받는다.
+ */
+function normalizeReminderMinutes(v: unknown): number | null {
+  if (v === undefined || v === null) return null;
+  const n = Number(v);
+  if (n === 0) return 0;
+  const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
+  if (!options.includes(n)) {
+    throw new ValidationError(`알림 시점은 0(끄기) 또는 ${REMINDER_THRESHOLD_OPTIONS.join("/")}분 전 중 하나여야 합니다.`);
+  }
+  return n;
 }
 
 /**
@@ -306,6 +338,7 @@ export async function createEvent(input: CreateInput): Promise<Event> {
   }
   const memo = typeof input.memo === "string" ? input.memo.trim() : "";
   const color = normalizeColor(input.color);
+  const reminderMinutes = normalizeReminderMinutes(input.reminderMinutes);
   const isLeave = Boolean(input.isLeave);
   // 연차가 아니면 종류도 뜻이 없다
   const leaveTypeId = isLeave && input.leaveTypeId ? Number(input.leaveTypeId) : null;
@@ -332,8 +365,8 @@ export async function createEvent(input: CreateInput): Promise<Event> {
   // 기간(일수)은 회차마다 그대로 유지한다
   const span = diffDays(input.date, endDate);
 
-  const sql = `INSERT INTO events (title, date, end_date, start_time, end_time, memo, color, series_id, is_leave, leave_type_id, leave_days, done, google_id, import_batch_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const sql = `INSERT INTO events (title, date, end_date, start_time, end_time, memo, color, series_id, is_leave, leave_type_id, leave_days, done, google_id, import_batch_id, reminder_minutes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   // 반복 일정은 회차가 60개까지 나온다. 하나씩 await하면 원격 DB에서 왕복이 60번이라
   // '한 번 추가'가 눈에 보이게 느려진다. 한 트랜잭션으로 묶어 한 번에 보낸다.
@@ -355,6 +388,7 @@ export async function createEvent(input: CreateInput): Promise<Event> {
         input.done ? 1 : 0,
         typeof input.googleId === "string" ? input.googleId : "",
         typeof input.importBatchId === "number" ? input.importBatchId : null,
+        reminderMinutes,
       ],
     })),
   );
@@ -425,6 +459,7 @@ export type UpdateInput = Partial<{
   leaveTypeId: number | null;
   leaveDays: number | null;
   done: boolean;
+  reminderMinutes: number | null;
 }>;
 
 /** 전달된 필드만 갱신한다 (완료 토글도 이 함수로 처리). */
@@ -511,6 +546,10 @@ export async function updateEvent(id: number, patch: UpdateInput): Promise<Event
   if (patch.color !== undefined) {
     sets.push("color = ?");
     values.push(normalizeColor(patch.color));
+  }
+  if (patch.reminderMinutes !== undefined) {
+    sets.push("reminder_minutes = ?");
+    values.push(normalizeReminderMinutes(patch.reminderMinutes));
   }
   if (patch.memo !== undefined) {
     sets.push("memo = ?");

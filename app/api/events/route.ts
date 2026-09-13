@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   try {
     const {
       title, date, endDate, startTime, endTime, memo, color, repeat,
-      isLeave, leaveTypeId, leaveDays,
+      isLeave, leaveTypeId, leaveDays, reminderMinutes,
     } = (body ?? {}) as Record<string, unknown>;
     const event = await createEvent({
       title: title as string,
@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       isLeave: isLeave as boolean | undefined,
       leaveTypeId: leaveTypeId as number | null | undefined,
       leaveDays: leaveDays as number | null | undefined,
+      reminderMinutes: reminderMinutes as number | null | undefined,
     });
     return NextResponse.json({ event }, { status: 201 });
   } catch (e) {

@@ -158,6 +158,10 @@ struct EventItem {
     title: String,
     #[serde(rename = "startTime")]
     start_time: Option<String>,
+    /// 이 일정만 몇 분 전에 알릴지. `Some(0)`이면 이 일정은 알림을 아예 끈 것이고,
+    /// `None`이면 전역 설정(`fetch_reminder_thresholds`)을 그대로 따른다.
+    #[serde(rename = "reminderMinutes")]
+    reminder_minutes: Option<i64>,
 }
 
 #[derive(Deserialize)]
@@ -219,11 +223,20 @@ fn run_notifier(app: &tauri::AppHandle) {
             let now_min = hhmm_to_min(&Local::now().format("%H:%M").to_string());
             for e in events {
                 let Some(start) = e.start_time.as_deref() else { continue };
+                // 0이면 이 일정만 알림을 껐다는 뜻 — 전역 설정과 무관하게 건너뛴다.
+                if e.reminder_minutes == Some(0) {
+                    continue;
+                }
                 let diff = hhmm_to_min(start) - now_min;
                 if diff < 0 {
                     continue;
                 }
-                for &threshold in &thresholds {
+                // 이 일정에 따로 정한 시점이 있으면 그것만 쓰고, 없으면 전역 목록을 쓴다.
+                let event_thresholds: Vec<i64> = match e.reminder_minutes {
+                    Some(n) => vec![n],
+                    None => thresholds.clone(),
+                };
+                for &threshold in &event_thresholds {
                     if diff > threshold || notified.contains(&(e.id, threshold)) {
                         continue;
                     }

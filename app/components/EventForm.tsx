@@ -36,6 +36,7 @@ export default function EventForm({
     isLeave: false,
     leaveTypeId: "",
     leaveDays: "",
+    reminderMinutes: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -66,6 +67,8 @@ export default function EventForm({
           leaveTypeId: values.leaveTypeId ? Number(values.leaveTypeId) : null,
           // 비우면 서버가 자동(주말·공휴일 제외)으로 센다
           leaveDays: values.leaveDays === "" ? null : Number(values.leaveDays),
+          // 비우면 전역 알림 설정을 따른다 (undefined로 보내 아예 안 건드림)
+          reminderMinutes: values.reminderMinutes === "" ? undefined : Number(values.reminderMinutes),
         }),
       });
 

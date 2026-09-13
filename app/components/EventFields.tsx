@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EVENT_COLORS } from "@/lib/eventColors";
 import { countWorkdays, fmtDays, useHolidayDates, type LeaveTypeOption } from "./leaveDays";
 import Hint from "./Hint";
@@ -35,7 +35,18 @@ export type EventFieldValues = {
   leaveTypeId: string;
   /** 자동 계산과 다르게 낼 때만 채운다 (반차 0.5 · 반반차 0.25). 비우면 자동 */
   leaveDays: string;
+  /** "" = 전역 알림 설정을 따름, "0" = 이 일정만 알림 끄기, 그 외엔 분(15/30/60/120) */
+  reminderMinutes: string;
 };
+
+const REMINDER_OPTIONS = [
+  { value: "", label: "기본(전역 설정)" },
+  { value: "15", label: "15분 전" },
+  { value: "30", label: "30분 전" },
+  { value: "60", label: "1시간 전" },
+  { value: "120", label: "2시간 전" },
+  { value: "0", label: "이 일정은 알림 끄기" },
+];
 
 const REPEAT_OPTIONS = [
   { value: "", label: "반복 없음" },
@@ -87,6 +98,15 @@ export default function EventFields({
 }) {
   const set = <K extends keyof EventFieldValues>(key: K, v: EventFieldValues[K]) =>
     onChange({ ...value, [key]: v });
+
+  // 알림 시점은 설치본(Tauri)에서만 뜻이 있다. 서버 prop으로 내려받는 대신
+  // `window.__TAURI_INTERNALS__`(Tauri가 웹뷰에 직접 심어 주는 값)로 클라이언트에서
+  // 바로 판단한다 — AddEventButton부터 여기까지 prop을 계속 이어 나를 필요가 없다.
+  // 서버에는 window가 없어 처음엔 false로 그리고, 마운트 후 다시 확인한다.
+  const [isTauri, setIsTauri] = useState(false);
+  useEffect(() => {
+    setIsTauri(typeof window !== "undefined" && "__TAURI_INTERNALS__" in window);
+  }, []);
 
   // 기간 입력을 펼쳤는지. 값이 이미 있으면(수정 팝업) 펼친 채로 시작한다.
   const [showRange, setShowRange] = useState(value.endDate !== "");
@@ -351,6 +371,25 @@ export default function EventFields({
                 )}
               </>
             )}
+          </Row>
+        )}
+
+        {/* 시각이 있는 일정만 알림이 뜻이 있다 — 하루 종일 일정은 몇 시에 알릴지가 없다 */}
+        {isTauri && !value.allDay && (
+          <Row label="알림">
+            <select
+              value={value.reminderMinutes}
+              onChange={(e) => set("reminderMinutes", e.target.value)}
+              disabled={disabled}
+              aria-label="알림 시점"
+              className={SELECT}
+            >
+              {REMINDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </Row>
         )}
 
