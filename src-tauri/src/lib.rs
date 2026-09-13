@@ -1,10 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{thread, time::Duration};
+use std::{fs, thread, time::Duration};
 
 #[cfg(not(debug_assertions))]
 use std::{
-    fs::{self, OpenOptions},
+    fs::OpenOptions,
     net::TcpStream,
     process::{Command, Stdio},
 };
@@ -137,13 +137,24 @@ pub fn run() {
             let handle = app.handle().clone();
             thread::spawn(move || run_notifier(&handle));
 
+            // 출근 직후 오늘 일정 요약 — 서버가 막 뜬 직후일 수 있어 2초 정도
+            // 기다렸다가 한 번만 찔러 본다. 자동 실행(로그인 시 시작)은 아직 없어서
+            // 지금은 "하루 중 처음 켤 때" 뜬다. 필요하면 사용자가 시작프로그램
+            // 폴더에 바로가기를 넣어 직접 자동 실행을 켤 수 있다.
+            let handle2 = app.handle().clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_secs(2));
+                run_morning_summary(&handle2);
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Golden Holiday Calendar");
 }
 
-#[cfg(not(debug_assertions))]
+/// 배포본 사이드카 데이터 폴더이자, 아침 요약 발송 여부 같은 자잘한 상태 파일을
+/// 두는 자리이기도 하다 — 그래서 개발 모드에서도 그대로 쓸 수 있게 cfg를 걷어냈다.
 fn app_data_dir() -> std::path::PathBuf {
     std::env::var_os("APPDATA")
         .map(std::path::PathBuf::from)
@@ -279,4 +290,40 @@ fn hhmm_to_min(s: &str) -> i64 {
     let h: i64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
     let m: i64 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
     h * 60 + m
+}
+
+/// 앱을 켤 때 그날 처음이면 한 번, 오늘 일정 요약을 알린다.
+///
+/// 하루에 한 번만 보내려고 앱 데이터 폴더에 마지막으로 보낸 날짜만 적어 둔다 —
+/// DB에 표를 새로 만들 만한 값어치가 없어 파일 하나로 충분하다.
+fn run_morning_summary(app: &tauri::AppHandle) {
+    let marker = app_data_dir().join("last-morning-summary.txt");
+    let today = Local::now().format("%Y-%m-%d").to_string();
+
+    if let Ok(last) = fs::read_to_string(&marker) {
+        if last.trim() == today {
+            return;
+        }
+    }
+
+    let Ok(events) = fetch_today_events(&today) else { return };
+
+    let body = if events.is_empty() {
+        "오늘은 등록된 일정이 없습니다.".to_string()
+    } else {
+        let titles: Vec<&str> = events.iter().map(|e| e.title.as_str()).collect();
+        format!("오늘 등록된 일정은 [{}] 총 {}건입니다.", titles.join("], ["), events.len())
+    };
+
+    let _ = app
+        .notification()
+        .builder()
+        .title("좋은 아침입니다!")
+        .body(body)
+        .show();
+
+    if let Some(dir) = marker.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    let _ = fs::write(&marker, &today);
 }
