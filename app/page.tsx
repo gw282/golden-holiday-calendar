@@ -32,6 +32,7 @@ import CalendarGrid from "./components/CalendarGrid";
 import LeaveBudgetButton from "./components/LeaveBudgetButton";
 import TripQuickLinks from "./components/TripQuickLinks";
 import AddEventButton from "./components/AddEventButton";
+import TodoList from "./components/TodoList";
 import EventList from "./components/EventList";
 import Shortcuts from "./components/Shortcuts";
 import HelpButton from "./components/HelpButton";
@@ -579,6 +580,11 @@ export default async function Home(props: PageProps<"/">) {
             highlightKey={rawHighlight}
           />
 
+          {/* 서버를 거치지 않는 개인용 체크리스트. 달력 바로 아래 — 일정과는 다른
+              성격(등록 절차 없는 낙서장)이라 오른쪽 '그 날 일정' 칸과는 분리해 둔다 */}
+          <div className="mt-4">
+            <TodoList />
+          </div>
         </section>
 
         {/* ── 오른쪽: 일정 ─────────────────────────────── */}

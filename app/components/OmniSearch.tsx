@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Event } from "@/lib/events";
+import { isChosungQuery, matchesChosung } from "@/lib/hangul";
 import EventList from "./EventList";
 import { SEARCH_INPUT_ID } from "./Shortcuts";
 
@@ -78,6 +79,8 @@ export default function OmniSearch({
   const sessionId = useRef<string | undefined>(undefined);
   /** 이 턴에 일정을 추가했나 — 그랬으면 달력을 다시 그려야 한다 */
   const changed = useRef(false);
+  /** 초성 검색용 전체 목록 캐시. 세션 동안만 유지 — 검색할 때마다 다시 받지 않는다 */
+  const allEvents = useRef<Event[] | null>(null);
 
   // 새 줄이 붙으면 아래로 따라간다
   useEffect(() => {
@@ -102,6 +105,27 @@ export default function OmniSearch({
     // ref를 렌더에서 읽으면 값이 바뀌어도 다시 그려지지 않는다(eslint react-hooks/refs).
     dialog.current?.showModal();
     try {
+      // 초성만으로 이루어진 입력은 서버의 LIKE 검색으로는 못 잡는다(부분 문자열
+      // 검색이라 "ㅈㄱㅎㅇ"이 "주간회의"와 글자 그대로 안 겹친다). 전체 목록을
+      // 한 번 받아 클라이언트에서 초성으로 거른다 — 새 API 라우트는 필요 없다.
+      if (isChosungQuery(q)) {
+        if (!allEvents.current) {
+          const res = await fetch(`/api/events`);
+          if (!res.ok) {
+            setError(`'${q}' 검색에 실패했습니다.`);
+            return;
+          }
+          const data = (await res.json()) as { events: Event[] };
+          allEvents.current = data.events;
+        }
+        const matched = allEvents.current.filter(
+          (e) => matchesChosung(e.title, q) || matchesChosung(e.memo, q),
+        );
+        setResults(matched);
+        setTruncated(false);
+        return;
+      }
+
       const res = await fetch(`/api/events?q=${encodeURIComponent(q)}`);
       if (!res.ok) {
         setError(`'${q}' 검색에 실패했습니다.`);

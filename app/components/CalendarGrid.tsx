@@ -3,6 +3,7 @@ import type { CalendarDay, CalendarMonth } from "@/lib/calendar";
 import type { Event } from "@/lib/events";
 import type { DateStr } from "@/lib/date";
 import { colorFg, colorHex } from "@/lib/eventColors";
+import DayCellInteractive from "./DayCellInteractive";
 
 /** 월요일 시작. 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다 */
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -16,7 +17,10 @@ type Range = { start: DateStr; end: DateStr };
 type Band = { event: Event; from: number; length: number; lane: number; continues: boolean };
 
 /**
- * 서버 컴포넌트 — 셀은 전부 링크라 클라이언트 JS가 필요 없다.
+ * 서버 컴포넌트 — 월/주 레이아웃과 띠(band) 계산은 여기서 그대로 한다.
+ * 셀 자체는 더블클릭 메모 때문에 얇은 클라이언트 리프(`DayCellInteractive`)로
+ * 감싸져 있지만, 그 내용물(공휴일명·일정 미리보기)은 여전히 이 파일이 계산해
+ * children으로 넘긴다 — 다시 계산하지 않는다.
  *
  * 여러 날에 걸친 일정은 칸마다 같은 제목을 반복하지 않고 **가로 띠**로 그린다.
  * 그래서 42칸을 한 번에 깔지 않고 **주 단위로** 렌더링한다. 주마다 relative 컨테이너를
@@ -202,10 +206,10 @@ function Cell({
   const hidden = day.events.length - shown.length;
 
   return (
-    <Link
+    <DayCellInteractive
+      date={day.date}
       href={href}
-      scroll={false}
-      aria-current={selected ? "date" : undefined}
+      selected={selected}
       style={{ paddingBottom: `${reservedPx + 6}px` }}
       className={`flex min-h-[84px] flex-col gap-0.5 border-r border-border p-1.5 text-left transition-colors [&:nth-child(7n)]:border-r-0 hover:bg-accent-soft/60 ${
         bottomBorder ? "border-b" : ""
@@ -242,6 +246,6 @@ function Cell({
       ))}
 
       {hidden > 0 && <span className="text-[10px] text-muted">+{hidden}건</span>}
-    </Link>
+    </DayCellInteractive>
   );
 }
