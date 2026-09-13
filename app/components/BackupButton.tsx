@@ -30,12 +30,18 @@ export default function BackupButton() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [done, setDone] = useState<{ batchId: number | null; added: number } | null>(null);
+  // 가져올 기간. 비우면 전체 기간. 파일 하나에 몇 년 치가 섞여 있을 때
+  // (구글 캘린더 내보내기가 특히 그렇다) 필요한 구간만 골라 보게 한다.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
 
   async function openPreview(file: File) {
     setBusy(true);
     setError(null);
     setPreview(null);
     setDone(null);
+    setRangeFrom("");
+    setRangeTo("");
     try {
       const text = await file.text();
       const res = await fetch("/api/ics/preview", {
@@ -67,11 +73,17 @@ export default function BackupButton() {
     setBusy(true);
     setError(null);
     try {
+      const itemByIndex = new Map((preview?.items ?? []).map((i) => [i.index, i]));
       const overrides: Record<number, { skip?: boolean; repeat?: unknown }> = {};
       for (const [k, c] of Object.entries(choices)) {
+        const index = Number(k);
         const count = Number(c.count);
-        overrides[Number(k)] = {
-          skip: c.skip,
+        const item = itemByIndex.get(index);
+        // 기간 필터 밖으로 밀려난 항목은 화면에서 체크를 바꿀 수 없었으므로
+        // choices에 남아 있는 값과 무관하게 항상 뺀다.
+        const skip = c.skip || (item !== undefined && !inRange(item));
+        overrides[index] = {
+          skip,
           repeat: c.freq && count >= 2 ? { freq: c.freq, count } : null,
         };
       }
@@ -114,10 +126,17 @@ export default function BackupButton() {
     }
   }
 
-  const counts = preview ? tally(preview.items) : null;
-  const willAdd = preview
-    ? preview.items.filter((i) => !choices[i.index]?.skip).length
-    : 0;
+  /** 고른 기간에 걸치는가. 하나라도 비어 있으면 그쪽은 안 가린다 */
+  function inRange(item: PreviewItem): boolean {
+    if (rangeFrom && item.endDate < rangeFrom) return false;
+    if (rangeTo && item.date > rangeTo) return false;
+    return true;
+  }
+
+  const visibleItems = preview ? preview.items.filter(inRange) : [];
+  const hiddenByRange = preview ? preview.items.length - visibleItems.length : 0;
+  const counts = preview ? tally(visibleItems) : null;
+  const willAdd = visibleItems.filter((i) => !choices[i.index]?.skip).length;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -205,8 +224,50 @@ export default function BackupButton() {
 
         {preview && counts && (
           <>
+            {/* 파일 하나에 몇 년 치가 섞여 있을 때(구글 캘린더 내보내기가 특히 그렇다)
+                필요한 기간만 골라 보게 한다. 비우면 전체 기간 그대로다. */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-[11px] text-muted">
+              <span>가져올 기간</span>
+              <input
+                type="date"
+                value={rangeFrom}
+                onChange={(e) => setRangeFrom(e.target.value)}
+                aria-label="가져올 기간 시작일"
+                className="rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground outline-none focus:border-accent"
+              />
+              <span>~</span>
+              <input
+                type="date"
+                value={rangeTo}
+                onChange={(e) => setRangeTo(e.target.value)}
+                aria-label="가져올 기간 종료일"
+                className="rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground outline-none focus:border-accent"
+              />
+              {(rangeFrom || rangeTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRangeFrom("");
+                    setRangeTo("");
+                  }}
+                  className="text-accent hover:underline"
+                >
+                  기간 지우기
+                </button>
+              )}
+            </div>
+
             <p className="border-b border-border px-4 py-2 text-[11px] text-muted">
-              모두 <span className="text-foreground">{preview.items.length}건</span> — 새로{" "}
+              {hiddenByRange > 0 ? (
+                <>
+                  기간 안 <span className="text-foreground">{visibleItems.length}건</span>
+                  <span className="text-muted"> (기간 밖 {hiddenByRange}건 제외)</span> — 새로{" "}
+                </>
+              ) : (
+                <>
+                  모두 <span className="text-foreground">{visibleItems.length}건</span> — 새로{" "}
+                </>
+              )}
               <span className="text-foreground">{counts.new}건</span>
               {counts.duplicate > 0 && ` · 이미 있음 ${counts.duplicate}건`}
               {counts.holiday > 0 && ` · 공휴일 ${counts.holiday}건`}
@@ -218,7 +279,7 @@ export default function BackupButton() {
             </p>
 
             <ul className="max-h-[46vh] divide-y divide-border overflow-y-auto">
-              {preview.items.map((item) => (
+              {visibleItems.map((item) => (
                 <Row
                   key={item.index}
                   item={item}

@@ -323,12 +323,13 @@ export default function EventFields({
         )}
 
         <Row label="메모">
-          <input
+          <textarea
             value={value.memo}
             onChange={(e) => set("memo", e.target.value)}
             disabled={disabled}
-            placeholder="선택"
-            className={`${INPUT} min-w-0 flex-1`}
+            placeholder="선택 — 여러 줄로 적을 수 있습니다"
+            rows={2}
+            className={`${INPUT} min-w-0 flex-1 resize-y`}
           />
         </Row>
       </div>

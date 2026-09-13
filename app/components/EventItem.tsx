@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Event } from "@/lib/events";
 import { addDays, formatKo, formatShortKo } from "@/lib/date";
 import { colorHex } from "@/lib/eventColors";
@@ -31,7 +31,10 @@ export default function EventItem({
   // 연차 배지에 '자동' 일수를 적으려면 공휴일이 필요하다 (모듈이 한 번만 받아 캐시한다)
   const holidays = useHolidayDates();
 
-  async function patch(body: Record<string, unknown>) {
+  const searchParams = useSearchParams();
+
+  /** redirectTo가 있으면 그 주소로 옮겨 가고, 없으면 지금 화면만 다시 그린다 */
+  async function patch(body: Record<string, unknown>, redirectTo?: string) {
     setBusy(true);
     setError(null);
     try {
@@ -45,7 +48,10 @@ export default function EventItem({
         setError(data.error ?? "저장하지 못했습니다.");
         return;
       }
-      startTransition(() => router.refresh());
+      startTransition(() => {
+        if (redirectTo) router.push(redirectTo);
+        else router.refresh();
+      });
     } catch {
       setError("서버에 연결하지 못했습니다.");
     } finally {
@@ -56,8 +62,18 @@ export default function EventItem({
   /**
    * 하루씩 밀거나 당긴다. 시작일만 보내면 서버가 **기간(일수)을 유지한 채**
    * 종료일도 같이 옮겨 주므로 여기서 계산할 것이 없다.
+   *
+   * 옮긴 뒤엔 **그 날짜를 그대로 따라간다.** 예전에는 화면을 다시 그리기만 해서,
+   * 오늘 일정을 내일로 미루면 오늘 칸에서 조용히 사라져 "어디 갔지"가 됐다.
+   * month·date만 바꾸고 나머지 쿼리(lv·hl 등)는 그대로 들고 간다.
    */
-  const shiftDate = (days: number) => patch({ date: addDays(event.date, days) });
+  const shiftDate = (days: number) => {
+    const newDate = addDays(event.date, days);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("month", newDate.slice(0, 7));
+    params.set("date", newDate);
+    return patch({ date: newDate }, `/?${params.toString()}`);
+  };
 
   async function remove(series = false) {
     setBusy(true);
@@ -179,7 +195,9 @@ export default function EventItem({
             </span>
           )}
         </div>
-        {event.memo && <p className="mt-0.5 text-xs text-muted">{event.memo}</p>}
+        {event.memo && (
+          <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted">{event.memo}</p>
+        )}
 
         {/* 준비물은 기간 일정에만 둔다. 하루짜리에 붙이면 모든 줄에 버튼이 하나 더 생기는데,
             챙길 것이 생기는 일정은 대개 여행·출장처럼 며칠에 걸친 것들이다 */}
