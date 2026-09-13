@@ -83,3 +83,37 @@ export async function setRecommendationEnabled(on: boolean): Promise<void> {
     [on ? "1" : "0"],
   );
 }
+
+/** 고를 수 있는 알림 시점(분 전). 화면 체크박스도, Rust 쪽 검증도 이 목록만 믿는다 */
+export const REMINDER_THRESHOLD_OPTIONS = [15, 30, 60, 120] as const;
+const DEFAULT_REMINDER_THRESHOLDS = [60, 15];
+
+/**
+ * 일정 시작 몇 분 전에 윈도우 알림을 줄지 — 설치본의 Rust 백그라운드 스레드
+ * (`src-tauri/src/lib.rs`의 `run_notifier`)가 30초마다 `/api/settings`를 같이 읽어
+ * 이 목록을 그대로 쓴다. 여기서 바뀌면 앱 재시작 없이 다음 폴링부터 반영된다.
+ */
+export async function getReminderThresholds(): Promise<number[]> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'reminderThresholds'`,
+  );
+  if (!row) return DEFAULT_REMINDER_THRESHOLDS;
+  try {
+    const parsed = JSON.parse(row.value);
+    const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
+    const valid = Array.isArray(parsed) ? parsed.filter((n) => options.includes(n)) : [];
+    return valid.length > 0 ? valid : DEFAULT_REMINDER_THRESHOLDS;
+  } catch {
+    return DEFAULT_REMINDER_THRESHOLDS;
+  }
+}
+
+export async function setReminderThresholds(minutes: number[]): Promise<void> {
+  const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
+  const valid = minutes.filter((n) => options.includes(n));
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('reminderThresholds', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [JSON.stringify(valid)],
+  );
+}

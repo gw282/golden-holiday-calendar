@@ -31,10 +31,10 @@ export default function CopyDayButton({ lines }: { lines: string[] }) {
     <button
       type="button"
       onClick={copy}
-      title="그 날 일정을 업무 보고용 텍스트로 복사"
+      title="이 날 일정을 업무 보고용 텍스트로 복사"
       className="rounded-md border border-border px-2 py-0.5 text-xs text-muted hover:border-accent hover:text-accent"
     >
-      {copied ? "복사됨" : "그날 일정 복사"}
+      {copied ? "복사됨" : "일정 복사"}
     </button>
   );
 }

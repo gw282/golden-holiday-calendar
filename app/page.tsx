@@ -11,7 +11,14 @@ import { collectCandidates } from "@/lib/bridge";
 import { busyDates, listEvents, listEventsByDate, timeConflictIds } from "@/lib/events";
 import { leaveSummaries } from "@/lib/leave";
 import { fxSnapshot } from "@/lib/fx";
-import { isChatEnabled, isDesktopApp, isOffline, isRecommendationEnabled } from "@/lib/settings";
+import {
+  getReminderThresholds,
+  isChatEnabled,
+  isDesktopApp,
+  isOffline,
+  isRecommendationEnabled,
+  REMINDER_THRESHOLD_OPTIONS,
+} from "@/lib/settings";
 import { isConfigured as googleConfigured } from "@/lib/google";
 import {
   addDays,
@@ -46,6 +53,7 @@ import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import OfflineToggle from "./components/OfflineToggle";
+import ReminderSettings from "./components/ReminderSettings";
 import RecommendationToggle from "./components/RecommendationToggle";
 import Onboarding from "./components/Onboarding";
 
@@ -250,6 +258,8 @@ export default async function Home(props: PageProps<"/">) {
   // 오프라인이면 **부르지도 않는다.** 화면에서 감추기만 하면 서버는 여전히 밖으로 나가려다
   // 타임아웃을 먹고, 그만큼 페이지가 늦게 뜬다.
   const offline = await isOffline();
+  // 알림 시점 선택은 설치본에서만 뜻이 있다 — 웹 배포본엔 이 알림 자체가 없다.
+  const reminderThresholds = isDesktopApp() ? await getReminderThresholds() : [];
   // 자격 증명(.env.local)이 없으면 구글 단추는 눌러도 "설정하세요" 안내만 나온다.
   // 눌러도 아무것도 안 되는 단추를 화면에 두지 않는다 — 채워 넣으면 그때 나타난다.
   const showGoogle = !offline && googleConfigured();
@@ -372,6 +382,10 @@ export default async function Home(props: PageProps<"/">) {
               같은 무리라는 게 안 보인다 */}
           <WeekNumToggle />
           <RecommendationToggle enabled={recsEnabled} />
+          {/* 알림 시점은 설치본에만 있는 기능이다 — 웹 배포본엔 이 알림 자체가 없다 */}
+          {isDesktopApp() && (
+            <ReminderSettings options={REMINDER_THRESHOLD_OPTIONS} selected={reminderThresholds} />
+          )}
           {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 배지를 아예 안 띄운다 —
               사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 계속 밝힌다 */}
           {!isDesktopApp() && (

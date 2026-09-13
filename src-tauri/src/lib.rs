@@ -167,10 +167,30 @@ struct EventsResponse {
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
 const BREAK_INTERVAL: Duration = Duration::from_secs(50 * 60);
-/// 시작 몇 분 전에 알릴지 — 한 일정에 여러 번(1시간 전, 15분 전) 각각 따로 알린다.
-const REMIND_THRESHOLDS_MIN: [i64; 2] = [60, 15];
+/// `/api/settings`가 비어 있거나 못 받아 왔을 때만 쓰는 값. 화면에서 고르면
+/// DB에 저장돼 이 기본값 대신 그 값을 매 폴링마다 읽어 온다.
+const DEFAULT_REMIND_THRESHOLDS_MIN: [i64; 2] = [60, 15];
 
-/// 일정 리마인더(시작 1시간 전 + 15분 전, 각각 한 번씩) + 50분 리프레시 알림.
+#[derive(Deserialize)]
+struct SettingsResponse {
+    #[serde(rename = "reminderThresholds")]
+    reminder_thresholds: Vec<i64>,
+}
+
+/// 화면의 '알림 시점' 체크박스가 저장한 값을 그대로 읽어 온다. 앱을 다시 켤 필요 없이
+/// 다음 폴링(최대 30초 뒤)부터 반영되게 하려고 매번 새로 불러온다.
+fn fetch_reminder_thresholds() -> Vec<i64> {
+    let url = format!("http://127.0.0.1:{SERVER_PORT}/api/settings");
+    ureq::get(&url)
+        .call()
+        .ok()
+        .and_then(|r| r.into_json::<SettingsResponse>().ok())
+        .filter(|s| !s.reminder_thresholds.is_empty())
+        .map(|s| s.reminder_thresholds)
+        .unwrap_or_else(|| DEFAULT_REMIND_THRESHOLDS_MIN.to_vec())
+}
+
+/// 일정 리마인더(화면에서 고른 시점마다 각각 한 번씩) + 50분 리프레시 알림.
 ///
 /// Next 서버가 이미 알고 있는 오늘 일정을 30초마다 `/api/events?date=`로 직접
 /// 찔러 본다 — 창(웹뷰)이 숨어 있어도 동작해야 하는 기능이라, 프런트에 기대지 않고
@@ -195,6 +215,7 @@ fn run_notifier(app: &tauri::AppHandle) {
         }
 
         if let Ok(events) = fetch_today_events(&today) {
+            let thresholds = fetch_reminder_thresholds();
             let now_min = hhmm_to_min(&Local::now().format("%H:%M").to_string());
             for e in events {
                 let Some(start) = e.start_time.as_deref() else { continue };
@@ -202,7 +223,7 @@ fn run_notifier(app: &tauri::AppHandle) {
                 if diff < 0 {
                     continue;
                 }
-                for threshold in REMIND_THRESHOLDS_MIN {
+                for &threshold in &thresholds {
                     if diff > threshold || notified.contains(&(e.id, threshold)) {
                         continue;
                     }
