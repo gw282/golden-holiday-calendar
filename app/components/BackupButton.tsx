@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PreviewItem, PreviewResult } from "@/lib/importIcs";
 import type { RepeatFreq } from "@/lib/events";
+import DatePicker from "./DatePicker";
 
 /**
  * `.ics` 백업 — 내보내기 / 가져오기.
@@ -228,20 +229,19 @@ export default function BackupButton() {
                 필요한 기간만 골라 보게 한다. 비우면 전체 기간 그대로다. */}
             <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-[11px] text-muted">
               <span>가져올 기간</span>
-              <input
-                type="date"
+              <DatePicker
                 value={rangeFrom}
-                onChange={(e) => setRangeFrom(e.target.value)}
-                aria-label="가져올 기간 시작일"
-                className="rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground outline-none focus:border-accent"
+                onChange={setRangeFrom}
+                ariaLabel="가져올 기간 시작일"
+                placeholder="전체"
               />
               <span>~</span>
-              <input
-                type="date"
+              <DatePicker
                 value={rangeTo}
-                onChange={(e) => setRangeTo(e.target.value)}
-                aria-label="가져올 기간 종료일"
-                className="rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground outline-none focus:border-accent"
+                onChange={setRangeTo}
+                min={rangeFrom || undefined}
+                ariaLabel="가져올 기간 종료일"
+                placeholder="전체"
               />
               {(rangeFrom || rangeTo) && (
                 <button

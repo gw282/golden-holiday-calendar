@@ -38,6 +38,7 @@ pub fn run() {
                     .env("NODE_ENV", "production")
                     .env("OFFLINE_DEFAULT", "1")
                     .env("CHAT_DISABLED", "1")
+                    .env("DESKTOP_APP", "1")
                     .env("APP_DATA_DIR", &data_dir)
                     .env("NODE_PATH", server_root.join("runtime"))
                     .stdout(Stdio::from(stdout))

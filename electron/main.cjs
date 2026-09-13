@@ -25,6 +25,7 @@ function startServer() {
       NODE_ENV: "production",
       OFFLINE_DEFAULT: "1",
       CHAT_DISABLED: "1",
+      DESKTOP_APP: "1",
       APP_DATA_DIR: path.join(app.getPath("userData"), "data"),
       NODE_PATH: path.join(serverRoot(), "runtime"),
     },

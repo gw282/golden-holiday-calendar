@@ -11,7 +11,7 @@ import { collectCandidates } from "@/lib/bridge";
 import { busyDates, listEvents, listEventsByDate, timeConflictIds } from "@/lib/events";
 import { leaveSummaries } from "@/lib/leave";
 import { fxSnapshot } from "@/lib/fx";
-import { isChatEnabled, isOffline } from "@/lib/settings";
+import { isChatEnabled, isDesktopApp, isOffline } from "@/lib/settings";
 import { isConfigured as googleConfigured } from "@/lib/google";
 import {
   addDays,
@@ -360,7 +360,11 @@ export default async function Home(props: PageProps<"/">) {
 
           <HelpButton />
           <ThemeToggle />
-          <OfflineToggle offline={offline} locked={process.env.OFFLINE_DEFAULT === "1"} />
+          {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 배지를 아예 안 띄운다 —
+              사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 계속 밝힌다 */}
+          {!isDesktopApp() && (
+            <OfflineToggle offline={offline} locked={process.env.OFFLINE_DEFAULT === "1"} />
+          )}
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다 */}

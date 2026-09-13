@@ -42,6 +42,18 @@ export function isChatEnabled(): boolean {
   return process.env.CHAT_DISABLED !== "1";
 }
 
+/**
+ * 데스크톱 설치본(Tauri/Electron)인가 — 그 안의 Node 서버를 띄울 때 심어 준
+ * `DESKTOP_APP=1`로 판단한다.
+ *
+ * 오프라인 배지를 숨기는 데만 쓴다. 설치본은 애초에 켜고 끌 수 없는 고정값이라
+ * "오프라인"이라고 계속 적어 두면 뭔가 빠진 것처럼 보인다 — 반면 사내망에 호스팅한
+ * 배포본(`OFFLINE_DEFAULT=1`이지만 웹 브라우저로 접속)은 계속 밝혀 두는 게 맞다.
+ */
+export function isDesktopApp(): boolean {
+  return process.env.DESKTOP_APP === "1";
+}
+
 export async function setOffline(on: boolean): Promise<void> {
   if (process.env.OFFLINE_DEFAULT === "1") return;
 

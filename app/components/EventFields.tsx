@@ -4,6 +4,8 @@ import { useState } from "react";
 import { EVENT_COLORS } from "@/lib/eventColors";
 import { countWorkdays, fmtDays, useHolidayDates, type LeaveTypeOption } from "./leaveDays";
 import Hint from "./Hint";
+import DatePicker from "./DatePicker";
+import TimePicker from "./TimePicker";
 
 /** 추가 폼과 수정 폼이 같은 입력을 쓰도록 모아 둔 것. 제출은 각자 한다. */
 export type EventFieldValues = {
@@ -111,27 +113,23 @@ export default function EventFields({
 
       <div className="flex flex-col gap-3">
         <Row label="날짜">
-          <input
-            type="date"
+          <DatePicker
             value={value.date}
-            onChange={(e) => set("date", e.target.value)}
+            onChange={(v) => set("date", v)}
             disabled={disabled}
-            aria-label="시작일"
-            className={INPUT}
+            ariaLabel="시작일"
           />
           {showRange ? (
             <>
               <span aria-hidden className="text-xs text-muted">
                 ~
               </span>
-              <input
-                type="date"
+              <DatePicker
                 value={value.endDate}
                 min={value.date}
-                onChange={(e) => set("endDate", e.target.value)}
+                onChange={(v) => set("endDate", v)}
                 disabled={disabled}
-                aria-label="종료일"
-                className={INPUT}
+                ariaLabel="종료일"
               />
               <button
                 type="button"
@@ -180,25 +178,20 @@ export default function EventFields({
           {/* 하루 종일이면 시각 칸을 흐리게 두지 않고 아예 감춘다 */}
           {!value.allDay && (
             <>
-              <input
-                type="time"
+              <TimePicker
                 value={value.startTime}
-                onChange={(e) => set("startTime", e.target.value)}
+                onChange={(v) => set("startTime", v)}
                 disabled={disabled}
-                aria-label="시작 시각"
-                className={INPUT}
+                ariaLabel="시작 시각"
               />
               <span aria-hidden className="text-xs text-muted">
                 ~
               </span>
-              <input
-                type="time"
+              <TimePicker
                 value={value.endTime}
-                min={value.startTime || undefined}
-                onChange={(e) => set("endTime", e.target.value)}
+                onChange={(v) => set("endTime", v)}
                 disabled={disabled || !value.startTime}
-                aria-label="종료 시각"
-                className={INPUT}
+                ariaLabel="종료 시각"
               />
             </>
           )}
