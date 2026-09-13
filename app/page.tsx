@@ -32,7 +32,7 @@ import CalendarGrid from "./components/CalendarGrid";
 import LeaveBudgetButton from "./components/LeaveBudgetButton";
 import TripQuickLinks from "./components/TripQuickLinks";
 import AddEventButton from "./components/AddEventButton";
-import CopyWeekButton from "./components/CopyWeekButton";
+import CopyDayButton from "./components/CopyDayButton";
 import TodoList from "./components/TodoList";
 import EventList from "./components/EventList";
 import Shortcuts from "./components/Shortcuts";
@@ -260,18 +260,15 @@ export default async function Home(props: PageProps<"/">) {
   const hasEvents = dayEvents.length > 0;
 
   /**
-   * 주간 업무 보고용 텍스트. 고른 날이 속한 주만 훑는다.
-   * `day.events`(하루짜리)뿐 아니라 그 날에 걸쳐 있는 기간 일정(`grid.spanning`)도
-   * 합친다 — 안 그러면 3일짜리 연차가 주간 요약에서 통째로 빠진다.
+   * 그 날 업무 보고용 텍스트. 오른쪽 '그 날 일정' 칸에 붙는 단추라 그 칸이 보여 주는
+   * 날짜 하나만 담는다 — 주간으로 묶으면 이 칸에서 보이지도 않는 다른 날짜가 같이
+   * 복사돼 자리와 내용이 어긋난다. `dayEvents`(하루짜리)뿐 아니라 이 날에 걸쳐 있는
+   * 기간 일정(`grid.spanning`)도 합친다.
    */
-  const weekOfSelected = grid.weeks.find((w) => w.some((d) => d.date === selected)) ?? [];
-  const weekCopyLines = weekOfSelected
-    .map((d) => {
-      const spanningHere = grid.spanning.filter((e) => e.date <= d.date && e.endDate >= d.date);
-      const titles = [...d.events, ...spanningHere].map((e) => e.title);
-      return titles.length > 0 ? `- ${formatShortKo(d.date)}: ${titles.join(", ")}` : null;
-    })
-    .filter((line): line is string => line !== null);
+  const spanningOnSelected = grid.spanning.filter((e) => e.date <= selected && e.endDate >= selected);
+  const dayCopyLines = [...dayEvents, ...spanningOnSelected].length > 0
+    ? [`- ${formatShortKo(selected)}: ${[...dayEvents, ...spanningOnSelected].map((e) => e.title).join(", ")}`]
+    : [];
 
   /**
    * 연휴 추천 덩어리. 자리를 두 군데 쓰기 때문에 변수로 뽑아 둔다 —
@@ -649,7 +646,7 @@ export default async function Home(props: PageProps<"/">) {
                 <span className="text-xs text-muted">
                   {dayEvents.length > 0 ? `${doneCount} / ${dayEvents.length} 완료` : "0건"}
                 </span>
-                <CopyWeekButton lines={weekCopyLines} />
+                <CopyDayButton lines={dayCopyLines} />
                 <AddEventButton defaultDate={selected} leaveTypes={leaveTypes} />
               </div>
             </div>
