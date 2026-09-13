@@ -20,28 +20,13 @@
   },
   "build": {
     "appId": "com.goldenholidaycalendar.desktop",
-    "productName": "황금연휴 캘린더",
+    "productName": "Golden Holiday Calendar",
     "directories": {
       "output": "release-desktop"
     },
-    "files": [
-      "electron/**/*",
-      "package.json",
-      "!node_modules/@anthropic-ai/**"
-    ],
-    "extraResources": [
-      {
-        "from": "desktop-dist",
-        "to": "app",
-        "filter": [
-          "**/*"
-        ]
-      }
-    ],
-    "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
-    },
+    "files": ["electron/**/*", "package.json", "!node_modules/@anthropic-ai/**"],
+    "extraResources": [{ "from": "desktop-dist", "to": "app", "filter": ["**/*"] }],
+    "win": { "target": "nsis", "icon": "build/icon.ico" },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
