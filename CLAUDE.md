@@ -19,7 +19,8 @@
 1. **일정 CRUD** — 추가 / 수정 / 완료 표시 / 삭제. 팝업(`<dialog>`)으로 입력한다
 2. **일정 속성** — 시작일·종료일(기간), 하루 종일 또는 시작~종료 시각, 메모, **색**
 3. **달력** — 월 그리드. 공휴일과 일정을 함께 보여 주고, 여러 날에 걸친 일정은 가로 띠로 그린다.
-   날짜를 누르면 오른쪽 칸이 그 날로 바뀐다
+   날짜를 누르면 오른쪽 칸이 그 날로 바뀐다. 왼쪽엔 ISO 주차, 급여일 같은 사내 고정
+   마일스톤도 같이 뜬다(`lib/milestones.ts`, DB 미참조라 연차·추천 계산엔 관여하지 않는다)
 4. **공휴일 보기** — 연도 단추로 그 해 월별 공휴일을 펼치고(연도 칩으로 해도 옮긴다),
    `‹ 개천절` `한글날 ›`로 앞뒤 공휴일에 바로 건너뛴다. `«`는 해, `‹`는 달 단위 이동
 5. **황금연휴 추천** — 고른 날이 들어가는 연휴 조합을 연차 사용일수(1·2·3일)별로 보여 준다
@@ -77,10 +78,12 @@ app/
   components/EventForm.tsx       'use client' — 추가 폼 본문
   components/EventList.tsx       'use client' — 목록
   components/EventItem.tsx       'use client' — 완료 토글 / 삭제 / 수정 버튼
+  components/CopyWeekButton.tsx  'use client' — 고른 날이 속한 주를 업무보고 텍스트로 복사
 lib/
   db.ts                 getDb() — DatabaseSync 싱글턴 + 스키마 + 시드
   events.ts             쿼리 모음 (list/create/update/delete) + 입력 검증 + busyDates
   holidays.ts           공휴일 **생성기** (음력 + 대체공휴일 규칙)
+  milestones.ts          사내 고정 마일스톤(급여일 등) — DB 미참조, 순수 표시 전용
   calendar.ts           공휴일 DB 조회 + 월 그리드 구성 + 인접 공휴일
   bridge.ts             연휴 후보 생성 (collectCandidates) — 정렬은 하지 않는다
   trips.ts              길이를 정해 두고 시기를 찾는다 (bridge와 방향이 반대)

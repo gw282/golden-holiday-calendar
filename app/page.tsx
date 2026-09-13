@@ -32,6 +32,7 @@ import CalendarGrid from "./components/CalendarGrid";
 import LeaveBudgetButton from "./components/LeaveBudgetButton";
 import TripQuickLinks from "./components/TripQuickLinks";
 import AddEventButton from "./components/AddEventButton";
+import CopyWeekButton from "./components/CopyWeekButton";
 import EventList from "./components/EventList";
 import Shortcuts from "./components/Shortcuts";
 import HelpButton from "./components/HelpButton";
@@ -248,6 +249,20 @@ export default async function Home(props: PageProps<"/">) {
 
   /** 이 날에 등록된 일정이 있는가. 오른쪽 칸의 **주인공이 누구인지**를 이걸로 가른다 */
   const hasEvents = dayEvents.length > 0;
+
+  /**
+   * 주간 업무 보고용 텍스트. 고른 날이 속한 주만 훑는다.
+   * `day.events`(하루짜리)뿐 아니라 그 날에 걸쳐 있는 기간 일정(`grid.spanning`)도
+   * 합친다 — 안 그러면 3일짜리 연차가 주간 요약에서 통째로 빠진다.
+   */
+  const weekOfSelected = grid.weeks.find((w) => w.some((d) => d.date === selected)) ?? [];
+  const weekCopyLines = weekOfSelected
+    .map((d) => {
+      const spanningHere = grid.spanning.filter((e) => e.date <= d.date && e.endDate >= d.date);
+      const titles = [...d.events, ...spanningHere].map((e) => e.title);
+      return titles.length > 0 ? `- ${formatShortKo(d.date)}: ${titles.join(", ")}` : null;
+    })
+    .filter((line): line is string => line !== null);
 
   /**
    * 연휴 추천 덩어리. 자리를 두 군데 쓰기 때문에 변수로 뽑아 둔다 —
@@ -609,6 +624,7 @@ export default async function Home(props: PageProps<"/">) {
                 <span className="text-xs text-muted">
                   {dayEvents.length > 0 ? `${doneCount} / ${dayEvents.length} 완료` : "0건"}
                 </span>
+                <CopyWeekButton lines={weekCopyLines} />
                 <AddEventButton defaultDate={selected} leaveTypes={leaveTypes} />
               </div>
             </div>

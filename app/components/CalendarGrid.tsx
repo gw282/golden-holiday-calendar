@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CalendarDay, CalendarMonth } from "@/lib/calendar";
 import type { Event } from "@/lib/events";
-import type { DateStr } from "@/lib/date";
+import { isoWeekNumber, type DateStr } from "@/lib/date";
 import { colorFg, colorHex } from "@/lib/eventColors";
 
 /** 월요일 시작. 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다 */
@@ -9,6 +9,9 @@ const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 /** 띠 한 줄의 높이(px). 칸 아래에 이만큼씩 자리를 비워 둔다 */
 const BAND_HEIGHT = 18;
+
+/** 왼쪽 주차 배지 폭. 헤더 줄의 빈 스페이서도 이 폭에 맞춘다 */
+const WEEK_NUM_WIDTH = "1.75rem";
 
 type Range = { start: DateStr; end: DateStr };
 
@@ -41,17 +44,20 @@ export default function CalendarGrid({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <div className="grid grid-cols-7 border-b border-border">
-        {WEEKDAYS.map((w, i) => (
-          <div
-            key={w}
-            className={`py-2 text-center text-xs font-medium ${
-              i === 6 ? "text-holiday" : i === 5 ? "text-saturday" : "text-muted"
-            }`}
-          >
-            {w}
-          </div>
-        ))}
+      <div className="flex border-b border-border">
+        <div aria-hidden style={{ width: WEEK_NUM_WIDTH }} className="shrink-0" />
+        <div className="grid flex-1 grid-cols-7">
+          {WEEKDAYS.map((w, i) => (
+            <div
+              key={w}
+              className={`py-2 text-center text-xs font-medium ${
+                i === 6 ? "text-holiday" : i === 5 ? "text-saturday" : "text-muted"
+              }`}
+            >
+              {w}
+            </div>
+          ))}
+        </div>
       </div>
 
       {month.weeks.map((week, weekIndex) => {
@@ -60,55 +66,68 @@ export default function CalendarGrid({
         const isLastWeek = weekIndex === month.weeks.length - 1;
 
         return (
-          <div key={week[0].date} className="relative">
-            <div className="grid grid-cols-7">
-              {week.map((day) => (
-                <Cell
-                  key={`${day.date}:${highlightKey}`}
-                  day={day}
-                  selected={day.date === selected}
-                  flash={inRange(day.date, highlightRange)}
-                  reservedPx={lanes * BAND_HEIGHT}
-                  bottomBorder={!isLastWeek}
-                  href={hrefFor(day.date)}
-                />
-              ))}
+          <div key={week[0].date} className="flex">
+            {/* ISO 주차. 그 주의 월요일(week[0])이 속한 주차를 그대로 쓴다 */}
+            <div
+              aria-hidden
+              style={{ width: WEEK_NUM_WIDTH }}
+              className={`flex shrink-0 items-start justify-center pt-1.5 font-mono text-[10px] text-muted ${
+                isLastWeek ? "" : "border-b border-border"
+              }`}
+            >
+              {isoWeekNumber(week[0].date)}
             </div>
 
-            {bands.map((band) => (
-              // 래퍼는 클릭을 통과시킨다. 띠가 아래 날짜 칸의 절반가량을 덮고 있어서
-              // 그대로 두면 빈 자리를 눌러도 일정 시작일로 튄다.
-              <div
-                key={band.event.id}
-                className="pointer-events-none absolute px-1"
-                style={{
-                  left: `${(band.from / 7) * 100}%`,
-                  width: `${(band.length / 7) * 100}%`,
-                  bottom: `${band.lane * BAND_HEIGHT + 2}px`,
-                }}
-              >
-                <Link
-                  href={hrefFor(band.event.date)}
-                  scroll={false}
-                  className={`pointer-events-auto block truncate rounded px-1.5 py-0.5 text-[10px] leading-tight ${
-                    band.event.done
-                      ? "bg-border text-muted line-through"
-                      : "hover:brightness-110"
-                  }`}
-                  style={
-                    band.event.done
-                      ? undefined
-                      : {
-                          backgroundColor: colorHex(band.event.color),
-                          color: colorFg(band.event.color),
-                        }
-                  }
-                >
-                  {band.event.title}
-                  {band.continues && " ›"}
-                </Link>
+            <div className="relative flex-1">
+              <div className="grid grid-cols-7">
+                {week.map((day) => (
+                  <Cell
+                    key={`${day.date}:${highlightKey}`}
+                    day={day}
+                    selected={day.date === selected}
+                    flash={inRange(day.date, highlightRange)}
+                    reservedPx={lanes * BAND_HEIGHT}
+                    bottomBorder={!isLastWeek}
+                    href={hrefFor(day.date)}
+                  />
+                ))}
               </div>
-            ))}
+
+              {bands.map((band) => (
+                // 래퍼는 클릭을 통과시킨다. 띠가 아래 날짜 칸의 절반가량을 덮고 있어서
+                // 그대로 두면 빈 자리를 눌러도 일정 시작일로 튄다.
+                <div
+                  key={band.event.id}
+                  className="pointer-events-none absolute px-1"
+                  style={{
+                    left: `${(band.from / 7) * 100}%`,
+                    width: `${(band.length / 7) * 100}%`,
+                    bottom: `${band.lane * BAND_HEIGHT + 2}px`,
+                  }}
+                >
+                  <Link
+                    href={hrefFor(band.event.date)}
+                    scroll={false}
+                    className={`pointer-events-auto block truncate rounded px-1.5 py-0.5 text-[10px] leading-tight ${
+                      band.event.done
+                        ? "bg-border text-muted line-through"
+                        : "hover:brightness-110"
+                    }`}
+                    style={
+                      band.event.done
+                        ? undefined
+                        : {
+                            backgroundColor: colorHex(band.event.color),
+                            color: colorFg(band.event.color),
+                          }
+                    }
+                  >
+                    {band.event.title}
+                    {band.continues && " ›"}
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
         );
       })}
@@ -223,6 +242,16 @@ function Cell({
 
       {day.holiday && (
         <span className="truncate text-[10px] leading-tight text-holiday">{day.holiday.name}</span>
+      )}
+
+      {/* DB 이벤트가 아니라 순수 표시용이라 색은 이 자리에서만 hex로 직접 준다 */}
+      {day.milestone && (
+        <span
+          className="truncate text-[10px] leading-tight"
+          style={{ color: day.milestone.color }}
+        >
+          {day.milestone.title}
+        </span>
       )}
 
       {shown.map((e) => (

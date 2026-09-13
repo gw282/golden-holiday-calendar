@@ -1,6 +1,7 @@
 import { all, get } from "./db";
 import { isMultiDay, listEventsBetween, type Event } from "./events";
 import type { Holiday } from "./holidays";
+import { milestonesInRange, type Milestone } from "./milestones";
 import {
   addDays,
   addMonths,
@@ -54,6 +55,8 @@ export type CalendarDay = {
   /** 0=일 … 6=토 */
   weekday: number;
   holiday: Holiday | null;
+  /** 사내 고정 마일스톤(급여일 등) — DB 이벤트가 아니라 순수 표시 전용이다 */
+  milestone: Milestone | null;
   events: Event[];
 };
 
@@ -78,6 +81,7 @@ export async function buildMonth(month: MonthStr): Promise<CalendarMonth> {
   const gridEnd = addDays(startOfWeek(last), 6);
 
   const holidays = await holidayMap(gridStart, gridEnd);
+  const milestones = milestonesInRange(gridStart, gridEnd);
 
   const byDate = new Map<DateStr, Event[]>();
   const spanning: Event[] = [];
@@ -106,6 +110,7 @@ export async function buildMonth(month: MonthStr): Promise<CalendarMonth> {
         isToday: cursor === t,
         weekday: dayOfWeek(cursor),
         holiday: holidays.get(cursor) ?? null,
+        milestone: milestones.get(cursor) ?? null,
         events: byDate.get(cursor) ?? [],
       });
       cursor = addDays(cursor, 1);

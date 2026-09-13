@@ -143,6 +143,18 @@ export function formatShortKo(s: DateStr): string {
 
 /* ── 시각(HH:MM) 유틸 — 겹침 검사용 ───────────────────────────────── */
 
+/**
+ * ISO-8601 주차. 그 주의 목요일이 속한 연도 기준으로 센다 — 12월 말/1월 초 주가
+ * 어느 해 1주차인지가 이 규칙으로 정해진다. 달력이 이미 월요일 시작이라 그대로 맞는다.
+ */
+export function isoWeekNumber(s: DateStr): number {
+  const d = parseDate(s);
+  const dayIdx = (d.getUTCDay() + 6) % 7; // 0=월 … 6=일
+  const thursday = new Date(d.getTime() + (3 - dayIdx) * DAY_MS);
+  const yearStart = Date.UTC(thursday.getUTCFullYear(), 0, 1);
+  return Math.ceil((Math.round((thursday.getTime() - yearStart) / DAY_MS) + 1) / 7);
+}
+
 /** 'HH:MM' -> 자정부터의 분. 형식이 아니면 null (검증은 lib/events.ts가 이미 한다) */
 export function minutesOf(hhmm: string | null | undefined): number | null {
   if (typeof hhmm !== "string") return null;
