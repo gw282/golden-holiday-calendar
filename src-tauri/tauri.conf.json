@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Golden Holiday Calendar",
+  "version": "0.1.1",
+  "identifier": "com.goldenholidaycalendar.desktop",
+  "build": {
+    "beforeDevCommand": "npm run tauri:prepare && npm run dev",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "web"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "runtime/app": "app",
+      "runtime/node.exe": "node.exe"
+    }
+  }
+}

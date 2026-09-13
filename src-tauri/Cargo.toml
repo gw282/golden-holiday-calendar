@@ -1,0 +1,20 @@
+[package]
+name = "golden-holiday-calendar"
+version = "0.1.1"
+description = "Golden Holiday Calendar desktop shell"
+authors = ["Golden Holiday Calendar"]
+edition = "2021"
+
+[lib]
+name = "golden_holiday_calendar_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

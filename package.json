@@ -13,7 +13,10 @@
     "lint": "eslint",
     "package": "next build && node scripts/package.mjs",
     "dev:lan": "next dev -H 0.0.0.0",
-    "desktop:build": "npm run package && node scripts/desktop-package.mjs && electron-builder --win nsis"
+    "desktop:build": "npm run package && node scripts/desktop-package.mjs && electron-builder --win nsis",
+    "tauri:dev": "tauri dev",
+    "tauri:prepare": "npm run package && node scripts/tauri-package.mjs",
+    "tauri:build": "npm run tauri:prepare && tauri build"
   },
   "build": {
     "appId": "com.goldenholidaycalendar.desktop",
@@ -21,9 +24,24 @@
     "directories": {
       "output": "release-desktop"
     },
-    "files": ["electron/**/*", "package.json", "!node_modules/@anthropic-ai/**"],
-    "extraResources": [{ "from": "desktop-dist", "to": "app", "filter": ["**/*"] }],
-    "win": { "target": "nsis", "icon": "build/icon.ico" },
+    "files": [
+      "electron/**/*",
+      "package.json",
+      "!node_modules/@anthropic-ai/**"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-dist",
+        "to": "app",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -40,6 +58,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
