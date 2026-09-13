@@ -151,8 +151,11 @@ export type CreateInput = {
   endTime?: string | null;
   memo?: string;
   color?: string | null;
-  /** 반복. 없으면 한 건만 만든다 */
-  repeat?: { freq: RepeatFreq; count: number } | null;
+  /**
+   * 반복. 없으면 한 건만 만든다. 횟수(count) 또는 종료일(until) 중 하나로 정한다 —
+   * "몇 월 며칠까지 반복"을 고를 수 있게 둘 다 받는다.
+   */
+  repeat?: { freq: RepeatFreq; count: number } | { freq: RepeatFreq; until: DateStr } | null;
   /**
    * 반복 묶음 id를 직접 지정한다. `.ics` 가져오기 전용이다 —
    * 내보낼 때 적어 둔 묶음을 그대로 되살려야 '반복 전체 삭제'가 계속 동작한다.
@@ -241,26 +244,46 @@ function normalizeEndDate(v: unknown, start: DateStr): DateStr {
  *
  * 매월·매년은 **같은 날짜**를 지킨다. 그 달에 없는 날(1/31 → 2월)은 만들지 않고 건너뛴다 —
  * 말없이 2/28로 당겨 놓으면 사용자가 넣은 적 없는 날짜가 생긴다.
+ *
+ * `count`(횟수)와 `until`(종료일) 중 하나로 언제까지 반복할지 정한다. `until`일 때는
+ * MAX_REPEAT_COUNT를 넘어가는 순간 예외를 던진다 — 종료일이 너무 멀어서 조용히
+ * 잘리면 사용자가 고른 날짜와 실제로 생긴 마지막 회차가 어긋난다.
  */
-function repeatDates(start: DateStr, freq: RepeatFreq, count: number): DateStr[] {
+function repeatDates(
+  start: DateStr,
+  freq: RepeatFreq,
+  spec: { count: number } | { until: DateStr },
+): DateStr[] {
   const out: DateStr[] = [];
   const y = Number(start.slice(0, 4));
   const m = Number(start.slice(5, 7));
   const d = Number(start.slice(8, 10));
+  const until = "until" in spec ? spec.until : null;
+  // count 모드는 그 횟수만큼만 돈다. until 모드는 상한(+1)까지 돌며 넘치는지 확인한다.
+  const iterations = "count" in spec ? spec.count : MAX_REPEAT_COUNT + 1;
 
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < iterations; i++) {
+    let date: DateStr | null;
     if (freq === "weekly") {
-      out.push(addDays(start, i * 7));
-      continue;
+      date = addDays(start, i * 7);
+    } else {
+      const at =
+        freq === "monthly"
+          ? new Date(Date.UTC(y, m - 1 + i, d))
+          : new Date(Date.UTC(y + i, m - 1, d));
+      // 넘긴 날짜가 그대로 살아 있는지 확인한다 (2월 31일은 3월로 밀려나므로 버린다)
+      date = at.getUTCDate() === d ? at.toISOString().slice(0, 10) : null;
     }
-
-    const at =
-      freq === "monthly"
-        ? new Date(Date.UTC(y, m - 1 + i, d))
-        : new Date(Date.UTC(y + i, m - 1, d));
-
-    // 넘긴 날짜가 그대로 살아 있는지 확인한다 (2월 31일은 3월로 밀려나므로 버린다)
-    if (at.getUTCDate() === d) out.push(at.toISOString().slice(0, 10));
+    if (date === null) continue;
+    if (until !== null) {
+      if (date > until) break;
+      if (out.length >= MAX_REPEAT_COUNT) {
+        throw new ValidationError(
+          `반복 종료일까지 ${MAX_REPEAT_COUNT}회를 넘습니다 — 종료일을 당겨 주세요.`,
+        );
+      }
+    }
+    out.push(date);
   }
 
   return out;
@@ -293,8 +316,11 @@ export async function createEvent(input: CreateInput): Promise<Event> {
   // 그래야 달력·busyDates·수정·삭제가 하나짜리 일정과 똑같이 동작한다.
   const repeat = normalizeRepeat(input.repeat);
   const starts = repeat
-    ? repeatDates(input.date, repeat.freq, repeat.count)
+    ? repeatDates(input.date, repeat.freq, "until" in repeat ? { until: repeat.until } : { count: repeat.count })
     : [input.date as DateStr];
+  if (repeat && starts.length === 0) {
+    throw new ValidationError("반복 종료일이 시작일보다 빠릅니다.");
+  }
   // 가져오기가 넘겨 준 묶음 id가 있으면 그대로 쓴다 (백업 복원). 없으면 반복이 새로 만든다.
   const seriesId =
     typeof input.seriesId === "string" && input.seriesId
@@ -338,12 +364,20 @@ export async function createEvent(input: CreateInput): Promise<Event> {
   return (await getEvent(firstId))!;
 }
 
-function normalizeRepeat(v: CreateInput["repeat"]): { freq: RepeatFreq; count: number } | null {
+function normalizeRepeat(
+  v: CreateInput["repeat"],
+): { freq: RepeatFreq; count: number } | { freq: RepeatFreq; until: DateStr } | null {
   if (!v) return null;
   if (!["weekly", "monthly", "yearly"].includes(v.freq)) {
     throw new ValidationError("반복 주기가 올바르지 않습니다.");
   }
-  const count = Math.trunc(Number(v.count));
+  if ("until" in v && v.until) {
+    if (!isValidDateStr(v.until)) {
+      throw new ValidationError("반복 종료일은 'YYYY-MM-DD' 형식이어야 합니다.");
+    }
+    return { freq: v.freq, until: v.until };
+  }
+  const count = Math.trunc(Number((v as { count: number }).count));
   if (!Number.isFinite(count) || count < 1 || count > MAX_REPEAT_COUNT) {
     throw new ValidationError(`반복 횟수는 1~${MAX_REPEAT_COUNT} 사이여야 합니다.`);
   }

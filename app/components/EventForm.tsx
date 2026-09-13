@@ -30,7 +30,9 @@ export default function EventForm({
     memo: "",
     color: "",
     repeatFreq: "",
+    repeatMode: "count",
     repeatCount: "8",
+    repeatUntil: "",
     isLeave: false,
     leaveTypeId: "",
     leaveDays: "",
@@ -56,7 +58,9 @@ export default function EventForm({
           memo: values.memo,
           color: values.color || null,
           repeat: values.repeatFreq
-            ? { freq: values.repeatFreq, count: Number(values.repeatCount) || 1 }
+            ? values.repeatMode === "until" && values.repeatUntil
+              ? { freq: values.repeatFreq, until: values.repeatUntil }
+              : { freq: values.repeatFreq, count: Number(values.repeatCount) || 1 }
             : null,
           isLeave: values.isLeave,
           leaveTypeId: values.leaveTypeId ? Number(values.leaveTypeId) : null,

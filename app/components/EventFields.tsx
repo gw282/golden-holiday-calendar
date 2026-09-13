@@ -23,8 +23,12 @@ export type EventFieldValues = {
   color: string;
   /** 반복 주기. 빈 값이면 반복 없음 */
   repeatFreq: string;
-  /** 반복 횟수 (첫 회차 포함) */
+  /** "몇 회"로 정할지 "몇 월 며칠까지"로 정할지 */
+  repeatMode: "count" | "until";
+  /** 반복 횟수 (첫 회차 포함) — repeatMode가 "count"일 때만 쓴다 */
   repeatCount: string;
+  /** 반복 종료일 — repeatMode가 "until"일 때만 쓴다 */
+  repeatUntil: string;
   /** 연차를 쓰는 일정인가 */
   isLeave: boolean;
   /** 어느 휴가인지 (leave_types.id). 빈 값이면 기본 종류 */
@@ -296,20 +300,55 @@ export default function EventFields({
                 </option>
               ))}
             </select>
-            {/* 반복을 고르지 않았으면 횟수 칸은 뜻이 없다 */}
+            {/* 반복을 고르지 않았으면 횟수·종료일 칸은 뜻이 없다 */}
             {value.repeatFreq && (
               <>
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={value.repeatCount}
-                  onChange={(e) => set("repeatCount", e.target.value)}
-                  disabled={disabled}
-                  aria-label="반복 횟수"
-                  className={`${INPUT} w-20`}
-                />
-                <span className="text-[11px] text-muted">회 (첫 회 포함)</span>
+                <div className="flex items-center gap-0.5 rounded-lg bg-background p-0.5">
+                  {(
+                    [
+                      { mode: "count", label: "횟수로" },
+                      { mode: "until", label: "종료일까지" },
+                    ] as const
+                  ).map((o) => (
+                    <button
+                      key={o.mode}
+                      type="button"
+                      onClick={() => set("repeatMode", o.mode)}
+                      disabled={disabled}
+                      className={`rounded-md px-2 py-0.5 text-[11px] transition-colors ${
+                        value.repeatMode === o.mode
+                          ? "bg-surface font-medium text-accent shadow-sm"
+                          : "text-muted hover:text-foreground"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {value.repeatMode === "count" ? (
+                  <>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={value.repeatCount}
+                      onChange={(e) => set("repeatCount", e.target.value)}
+                      disabled={disabled}
+                      aria-label="반복 횟수"
+                      className={`${INPUT} w-20`}
+                    />
+                    <span className="text-[11px] text-muted">회 (첫 회 포함)</span>
+                  </>
+                ) : (
+                  <DatePicker
+                    value={value.repeatUntil}
+                    onChange={(v) => set("repeatUntil", v)}
+                    min={value.date}
+                    disabled={disabled}
+                    ariaLabel="반복 종료일"
+                    placeholder="종료일 선택"
+                  />
+                )}
               </>
             )}
           </Row>

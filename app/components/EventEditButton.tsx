@@ -19,7 +19,9 @@ function toValues(event: Event): EventFieldValues {
     color: event.color,
     // 반복은 만들 때만 정한다. 여기서는 쓰지 않지만 타입을 맞추려고 둔다.
     repeatFreq: "",
+    repeatMode: "count",
     repeatCount: "1",
+    repeatUntil: "",
     isLeave: event.isLeave,
     leaveTypeId: event.leaveTypeId === null ? "" : String(event.leaveTypeId),
     // null은 '자동'이라 칸을 비워 둔다. 자동값을 적어 넣으면 직접 입력으로 굳어 버려서

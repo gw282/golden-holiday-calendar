@@ -8,7 +8,15 @@ use std::{
     thread,
     time::Duration,
 };
+#[cfg(all(windows, not(debug_assertions)))]
+use std::os::windows::process::CommandExt;
 use tauri::Manager;
+
+/// `CREATE_NO_WINDOW` — 이게 없으면 node.exe가 콘솔 창을 따로 하나 더 띄운다.
+/// 앱 자신은 위의 `windows_subsystem = "windows"`로 이미 숨겼지만, 그건 이 프로세스에만
+/// 적용되고 **새로 spawn하는 자식 프로세스(node.exe)에는 안 걸린다** — 둘을 따로 꺼야 한다.
+#[cfg(all(windows, not(debug_assertions)))]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,8 +38,8 @@ pub fn run() {
                     .open(data_dir.join("server.log"))?;
                 let stderr = stdout.try_clone()?;
 
-                Command::new(node)
-                    .current_dir(&server_root)
+                let mut cmd = Command::new(node);
+                cmd.current_dir(&server_root)
                     .arg("server.js")
                     .env("HOSTNAME", "127.0.0.1")
                     .env("PORT", "3210")
@@ -42,8 +50,10 @@ pub fn run() {
                     .env("APP_DATA_DIR", &data_dir)
                     .env("NODE_PATH", server_root.join("runtime"))
                     .stdout(Stdio::from(stdout))
-                    .stderr(Stdio::from(stderr))
-                    .spawn()?;
+                    .stderr(Stdio::from(stderr));
+                #[cfg(windows)]
+                cmd.creation_flags(CREATE_NO_WINDOW);
+                cmd.spawn()?;
 
                 for _ in 0..80 {
                     if TcpStream::connect("127.0.0.1:3210").is_ok() {
