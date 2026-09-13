@@ -81,7 +81,7 @@ export async function buildMonth(month: MonthStr): Promise<CalendarMonth> {
   const gridEnd = addDays(startOfWeek(last), 6);
 
   const holidays = await holidayMap(gridStart, gridEnd);
-  const milestones = milestonesInRange(gridStart, gridEnd);
+  const milestones = milestonesInRange(gridStart, gridEnd, new Set(holidays.keys()));
 
   const byDate = new Map<DateStr, Event[]>();
   const spanning: Event[] = [];
