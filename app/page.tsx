@@ -359,7 +359,7 @@ export default async function Home(props: PageProps<"/">) {
             </h1>
           </Hint>
 
-          <HelpButton />
+          <HelpButton desktop={isDesktopApp()} />
           <ZoomToggle />
           <ThemeToggle />
           {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 배지를 아예 안 띄운다 —

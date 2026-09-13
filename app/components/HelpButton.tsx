@@ -9,7 +9,7 @@ import { useRef } from "react";
  * 달력 아래에 접어 두기도 했었지만, 내용이 달력·목록·단축키를 다 다루는 전체 도움말이라
  * 범위와 위치가 어긋났다. 그래서 헤더로 올렸다.
  */
-export default function HelpButton() {
+export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
 
   return (
@@ -57,10 +57,22 @@ export default function HelpButton() {
         <dl className="flex flex-col gap-3 p-4 text-xs">
           <Row term="일정 등록">
             제목과 시작일은 필수입니다. 종료일을 넣으면 기간 일정이 되고, 시간·메모·색은 필요할 때만 입력합니다.
-            반복 일정은 반복 횟수까지 정해 저장하세요.
+            반복 일정은 <span className="text-foreground">횟수</span> 또는{" "}
+            <span className="text-foreground">종료일까지</span> 중 골라 저장하세요.
           </Row>
-          <Row term="완료·수정">
-            목록의 체크 표시로 완료를 바꾸고, 일정 항목의 수정 버튼에서 내용을 고칩니다. 삭제한 일정은 복구할 수 없습니다.
+          <Row term="완료·수정·날짜 이동">
+            목록의 체크 표시로 완료를 바꾸고, 수정 버튼에서 내용을 고칩니다.
+            <span className="text-foreground">−1일 / +1일</span> 단추를 누르면 화면이 옮긴 날짜를
+            그대로 따라갑니다. 삭제한 일정은 복구할 수 없습니다.
+          </Row>
+          <Row term="날짜 더블클릭 메모">
+            달력의 날짜를 더블클릭하면 그 날만을 위한 짧은 메모를 남길 수 있습니다.{" "}
+            <span className="text-foreground">이 PC에만 저장</span>되며(서버·다른 기기와 공유되지
+            않음), 메모가 있는 날엔 모서리에 작은 점이 뜹니다.
+          </Row>
+          <Row term="오늘 할 일">
+            달력 아래 체크리스트는 등록 절차 없이 바로 쓰는 낙서장입니다. 마찬가지로{" "}
+            <span className="text-foreground">이 PC에만</span> 저장됩니다.
           </Row>
           <Row term="휴가 잔고">
             <span className="text-foreground">연차는 입사일</span>부터 1년,{" "}
@@ -70,24 +82,50 @@ export default function HelpButton() {
           <Row term="연휴 추천">
             공휴일이 없는 주에도 아무 날이나 눌러 보세요. 이미 하루 종일 일정이 있는 날은 빠집니다.
           </Row>
+          <Row term="달력 왼쪽 숫자·색 배지">
+            맨 왼쪽 작은 숫자는 <span className="text-foreground">그 주의 몇 번째 주</span>인지입니다.
+            날짜 칸의 색 배지는 급여일 같은 <span className="text-foreground">회사 고정 일정</span>이라
+            직접 등록·수정할 수 없습니다.
+          </Row>
+          <Row term="검색">
+            제목·메모로 찾거나, <span className="text-foreground">초성만 쳐도</span>{" "}
+            (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의) 찾아집니다.
+          </Row>
+          <Row term="이번 주 복사">
+            일정 칸 위쪽 <span className="text-foreground">주간 복사</span> 단추를 누르면 이번 주
+            일정이 업무 보고용 줄글로 클립보드에 복사됩니다.
+          </Row>
+          <Row term="화면 확대">
+            헤더의 <span className="text-foreground">100% / 125% / 150%</span> 단추로 글자·칸이
+            전체적으로 커집니다. 모니터가 작거나 글씨가 작게 느껴질 때 눌러 보세요.
+          </Row>
           <Row term="항공·숙소">
             추천이 여러 줄이면 <span className="text-accent">파랗게 표시된 줄</span> 기준입니다.
             가격은 가져오지 않습니다.
           </Row>
-          {/* 이 스위치가 무엇을 끄는지는 **화면을 봐도 알 수 없다.** 끄고 나서야
-              항공권 줄이 사라진 것을 눈치채는데, 그때는 왜 사라졌는지 모른다.
-              무엇이 사라지는지보다 **무엇이 그대로인지**를 먼저 적는다 — 오프라인으로
-              바꾸는 순간 앱이 반쪽이 되는 게 아닌지가 실제로 궁금한 것이기 때문이다. */}
+          {/* 이 항목이 무엇을 끄는지는 화면을 봐도 알 수 없다. 무엇이 사라지는지보다
+              **무엇이 그대로인지**를 먼저 적는다 — 오프라인이 되는 순간 앱이 반쪽이 되는 게
+              아닌지가 실제로 궁금한 것이기 때문이다. */}
           <Row term="오프라인">
+            {desktop ? (
+              <>
+                이 설치본은 <span className="text-foreground">사내망 전용으로 항상 오프라인</span>{" "}
+                상태입니다.
+              </>
+            ) : (
+              "꺼져 있으면 오프라인 상태입니다."
+            )}{" "}
             달력 · 일정 · 연차 · 연휴 추천은 <span className="text-foreground">그대로 됩니다</span>{" "}
             (전부 이 PC에서 계산합니다).
             <br />
-            <span className="text-holiday">사라지는 것</span>은 밖에 닿아야 하는 넷입니다 —
+            <span className="text-holiday">안 되는 것</span>은 밖에 닿아야 하는 넷입니다 —
             항공권·숙소 검색, 환율, 구글 캘린더, 챗봇.
           </Row>
-          <Row term="회사 내부망">
-            설치한 PC에서 프로그램을 실행하면 그 PC의 일정 DB를 사용합니다. 다른 사내 PC에서 함께 보려면 설치한 PC의 사내 IP 주소로 접속해야 합니다.
-          </Row>
+          {!desktop && (
+            <Row term="회사 내부망">
+              설치한 PC에서 프로그램을 실행하면 그 PC의 일정 DB를 사용합니다. 다른 사내 PC에서 함께 보려면 설치한 PC의 사내 IP 주소로 접속해야 합니다.
+            </Row>
+          )}
           <Row term="단축키">
             <Kbd>←</Kbd> <Kbd>→</Kbd> 월 이동 · <Kbd>T</Kbd> 오늘 · <Kbd>N</Kbd> 새 일정 ·{" "}
             <Kbd>Esc</Kbd> 닫기
