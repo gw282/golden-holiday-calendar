@@ -4,6 +4,7 @@ import type { Event } from "@/lib/events";
 import { isoWeekNumber, type DateStr } from "@/lib/date";
 import { colorFg, colorHex } from "@/lib/eventColors";
 import DayCellInteractive from "./DayCellInteractive";
+import EventDragChip from "./EventDragChip";
 
 /** 월요일 시작. 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다 */
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
@@ -265,19 +266,7 @@ function Cell({
       )}
 
       {shown.map((e) => (
-        <span
-          key={e.id}
-          className={`flex items-center gap-1 truncate text-[11px] leading-tight ${
-            e.done ? "text-muted line-through" : "text-foreground"
-          }`}
-        >
-          <span
-            aria-hidden
-            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: e.done ? "var(--border)" : colorHex(e.color) }}
-          />
-          <span className="truncate">{e.title}</span>
-        </span>
+        <EventDragChip key={e.id} id={e.id} title={e.title} done={e.done} colorHex={colorHex(e.color)} />
       ))}
 
       {hidden > 0 && <span className="text-[10px] text-muted">+{hidden}건</span>}

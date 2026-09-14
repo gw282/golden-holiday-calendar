@@ -34,6 +34,10 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// dev(`tauri:dev`)는 `npm run dev`(3000)를 그대로 보고, 배포본은 사이드카 서버(3210)를 본다.
 const SERVER_PORT: &str = if cfg!(debug_assertions) { "3000" } else { "3210" };
+const SERVER_HOST: &str = if cfg!(debug_assertions) { "localhost" } else { "127.0.0.1" };
+
+/// 트레이 미니 팝업 창 크기.
+const TRAY_POPUP_SIZE: (f64, f64) = (300.0, 380.0);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -49,7 +53,8 @@ pub fn run() {
             set_opacity,
             toggle_mini,
             set_autostart,
-            get_autostart
+            get_autostart,
+            show_main
         ])
         .setup(|app| {
             // 윈도우 토스트 알림에 "황금연휴 캘린더"라고 뜨게 하는 등록. 이게 없으면
@@ -61,11 +66,8 @@ pub fn run() {
 
             let hidden_start = std::env::args().any(|a| a == "--hidden");
 
-            #[cfg(debug_assertions)]
-            let url = tauri::WebviewUrl::External("http://localhost:3000".parse().unwrap());
-
             #[cfg(not(debug_assertions))]
-            let url = {
+            {
                 let resource_dir = app.path().resource_dir()?;
                 let server_root = resource_dir.join("app");
                 let data_dir = app_data_dir();
@@ -105,14 +107,16 @@ pub fn run() {
                 }
 
                 for _ in 0..80 {
-                    if TcpStream::connect("127.0.0.1:3210").is_ok() {
+                    if TcpStream::connect(format!("{SERVER_HOST}:{SERVER_PORT}")).is_ok() {
                         break;
                     }
                     thread::sleep(Duration::from_millis(100));
                 }
+            }
 
-                tauri::WebviewUrl::External("http://127.0.0.1:3210".parse().unwrap())
-            };
+            let base_url = format!("http://{SERVER_HOST}:{SERVER_PORT}");
+            let url = tauri::WebviewUrl::External(base_url.parse().unwrap());
+            let tray_url = tauri::WebviewUrl::External(format!("{base_url}/tray").parse().unwrap());
 
             let window = tauri::WebviewWindowBuilder::new(app, "main", url)
                 .title("황금연휴 캘린더")
@@ -121,6 +125,33 @@ pub fn run() {
                 .resizable(true)
                 .visible(!hidden_start)
                 .build()?;
+
+            // 트레이 미니 팝업 — 매번 새 창을 만들지 않고 하나를 숨겼다 보여줬다 한다.
+            // "오늘 남은 일정"만 훑어보는 가벼운 용도라 장식(제목표시줄)도, 작업표시줄
+            // 항목도 없앤다. `/tray` 페이지가 무엇을 보여줄지는 서버(Next) 쪽에서 정한다 —
+            // Rust는 창을 띄우고 위치만 잡을 뿐, "오늘 남았나/내일 첫 일정인가" 분기는
+            // 모르는 편이 낫다(그 로직은 DB를 직접 보는 서버 컴포넌트가 훨씬 간단하다).
+            let tray_popup = tauri::WebviewWindowBuilder::new(app, "tray", tray_url)
+                .title("오늘 일정")
+                .inner_size(TRAY_POPUP_SIZE.0, TRAY_POPUP_SIZE.1)
+                .resizable(false)
+                .decorations(false)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .shadow(true)
+                .visible(false)
+                .build()?;
+
+            // 팝업 밖을 클릭해 포커스를 잃으면 닫는다 — 흔한 플라이아웃 동작.
+            // (트레이 아이콘 hover로 여는 방식은 일부러 안 했다 — 마우스가 트레이에서
+            // 팝업 쪽으로 넘어가는 순간 Leave 이벤트가 먼저 떠서 안의 버튼을 누르기도
+            // 전에 닫혀 버린다. 클릭으로 열고 클릭/포커스아웃으로 닫는 쪽이 더 믿을 만하다.)
+            let tp = tray_popup.clone();
+            tray_popup.on_window_event(move |event| {
+                if let WindowEvent::Focused(false) = event {
+                    let _ = tp.hide();
+                }
+            });
 
             // ── 시스템 트레이 ──────────────────────────────────────────
             // 닫기 버튼은 종료가 아니라 트레이로 숨긴다. 알림 폴링이 창 상태와
@@ -148,14 +179,23 @@ pub fn run() {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        position,
                         ..
                     } = event
                     {
                         let app = tray.app_handle();
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
+                        let Some(popup) = app.get_webview_window("tray") else { return };
+                        if popup.is_visible().unwrap_or(false) {
+                            let _ = popup.hide();
+                            return;
                         }
+                        // 트레이는 보통 화면 오른쪽 아래에 있다. 클릭 지점을 팝업의
+                        // 오른쪽 아래 모서리로 보고 왼쪽 위로 띄우면 화면 밖으로 안 나간다.
+                        let x = (position.x - TRAY_POPUP_SIZE.0).max(0.0);
+                        let y = (position.y - TRAY_POPUP_SIZE.1).max(0.0);
+                        let _ = popup.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+                        let _ = popup.show();
+                        let _ = popup.set_focus();
                     }
                 })
                 .build(app)?;
@@ -299,6 +339,16 @@ fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
 #[tauri::command]
 fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// 트레이 미니 팝업의 "전체 달력 열기" 버튼이 부른다. 팝업 자체는 자기가 포커스를
+/// 잃으면(메인 창에 포커스가 넘어가는 순간 포함) 알아서 숨으므로 여기서 따로 안 닫아도 된다.
+#[tauri::command]
+fn show_main(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
 }
 
 /// 배포본 사이드카 데이터 폴더이자, 아침 요약 발송 여부 같은 자잘한 상태 파일을
