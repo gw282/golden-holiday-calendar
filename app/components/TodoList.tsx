@@ -107,10 +107,6 @@ export default function TodoList() {
           ))}
         </ul>
       )}
-
-      <p className="border-t border-border px-4 py-1.5 text-[10px] text-muted">
-        이 목록은 이 기기에만 저장됩니다.
-      </p>
     </section>
   );
 }
