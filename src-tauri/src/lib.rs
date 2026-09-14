@@ -334,23 +334,27 @@ const BREAK_INTERVAL: Duration = Duration::from_secs(50 * 60);
 /// DB에 저장돼 이 기본값 대신 그 값을 매 폴링마다 읽어 온다.
 const DEFAULT_REMIND_THRESHOLDS_MIN: [i64; 2] = [60, 15];
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct SettingsResponse {
     #[serde(rename = "reminderThresholds")]
     reminder_thresholds: Vec<i64>,
+    #[serde(rename = "hourlyChime", default)]
+    hourly_chime: bool,
 }
 
-/// 화면의 '알림 시점' 체크박스가 저장한 값을 그대로 읽어 온다. 앱을 다시 켤 필요 없이
-/// 다음 폴링(최대 30초 뒤)부터 반영되게 하려고 매번 새로 불러온다.
-fn fetch_reminder_thresholds() -> Vec<i64> {
+/// 화면의 '알림 시점'·'1시간마다 알림' 체크박스가 저장한 값을 그대로 읽어 온다.
+/// 앱을 다시 켤 필요 없이 다음 폴링(최대 30초 뒤)부터 반영되게 하려고 매번 새로 불러온다.
+fn fetch_settings() -> SettingsResponse {
     let url = format!("http://127.0.0.1:{SERVER_PORT}/api/settings");
-    ureq::get(&url)
+    let mut s: SettingsResponse = ureq::get(&url)
         .call()
         .ok()
-        .and_then(|r| r.into_json::<SettingsResponse>().ok())
-        .filter(|s| !s.reminder_thresholds.is_empty())
-        .map(|s| s.reminder_thresholds)
-        .unwrap_or_else(|| DEFAULT_REMIND_THRESHOLDS_MIN.to_vec())
+        .and_then(|r| r.into_json().ok())
+        .unwrap_or_default();
+    if s.reminder_thresholds.is_empty() {
+        s.reminder_thresholds = DEFAULT_REMIND_THRESHOLDS_MIN.to_vec();
+    }
+    s
 }
 
 /// 일정 리마인더(화면에서 고른 시점마다 각각 한 번씩) + 50분 리프레시 알림.
@@ -371,6 +375,9 @@ fn run_notifier(app: &tauri::AppHandle) {
     // 50분에 포함되지 않는다. 창을 보이는 채로 다른 일을 해도 시간은 그대로 흐르지만,
     // 적어도 "컴퓨터를 아예 안 쓰고 있는데 알림이 울리는" 경우는 없앤다.
     let mut active_secs: u64 = 0;
+    // "1시간마다 알림"의 기준 — 앱을 켠 시점(이 스레드가 시작된 시점)부터 흐른 시간.
+    // 정각(예: 3시 정각)에 맞추는 게 아니라 실행 후 60분마다다.
+    let mut last_chime = std::time::Instant::now();
 
     loop {
         thread::sleep(POLL_INTERVAL);
@@ -381,8 +388,10 @@ fn run_notifier(app: &tauri::AppHandle) {
             notified_date = today.clone();
         }
 
+        let settings = fetch_settings();
+
         if let Ok(events) = fetch_today_events(&today) {
-            let thresholds = fetch_reminder_thresholds();
+            let thresholds = settings.reminder_thresholds.clone();
             let now_min = hhmm_to_min(&Local::now().format("%H:%M").to_string());
             for e in events {
                 let Some(start) = e.start_time.as_deref() else { continue };
@@ -434,6 +443,19 @@ fn run_notifier(app: &tauri::AppHandle) {
                 .body("잠시 일어나 스트레칭 해 보세요.")
                 .show();
             active_secs = 0;
+        }
+
+        // 50분 스트레칭 알림과는 별개다 — 그쪽은 "일한 지 얼마나 됐는지", 이쪽은
+        // 단순히 "앱을 켠 뒤 몇 시간째인지"를 알린다. 꺼져 있는 동안에도 시간은
+        // 그대로 흘러서, 나중에 켜면 그 자리에서 바로 한 번 울린다 — 그것도 무해하다.
+        if settings.hourly_chime && last_chime.elapsed() >= Duration::from_secs(3600) {
+            let _ = app
+                .notification()
+                .builder()
+                .title("1시간이 지났습니다")
+                .body(format!("현재 시각 {}", Local::now().format("%H:%M")))
+                .show();
+            last_chime = std::time::Instant::now();
         }
     }
 }

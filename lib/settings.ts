@@ -117,3 +117,23 @@ export async function setReminderThresholds(minutes: number[]): Promise<void> {
     [JSON.stringify(valid)],
   );
 }
+
+/**
+ * 정각마다 알림을 줄 것인가 — 기본은 꺼짐. 50분(창이 보이는 시간 기준) 스트레칭
+ * 알림과는 별개다 — 그쪽은 "일한 지 얼마나 됐는지", 이쪽은 "지금 몇 시인지"를 알리는
+ * 용도라 둘 다 켜 둘 수 있다. Rust 쪽(`run_notifier`)이 30초마다 이 값을 같이 읽는다.
+ */
+export async function isHourlyChimeEnabled(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'hourlyChime'`,
+  );
+  return row ? row.value === "1" : false;
+}
+
+export async function setHourlyChimeEnabled(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('hourlyChime', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}

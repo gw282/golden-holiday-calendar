@@ -15,6 +15,7 @@ import {
   getReminderThresholds,
   isChatEnabled,
   isDesktopApp,
+  isHourlyChimeEnabled,
   isOffline,
   isRecommendationEnabled,
   REMINDER_THRESHOLD_OPTIONS,
@@ -257,6 +258,7 @@ export default async function Home(props: PageProps<"/">) {
   const offline = await isOffline();
   // 알림 시점 선택은 설치본에서만 뜻이 있다 — 웹 배포본엔 이 알림 자체가 없다.
   const reminderThresholds = isDesktopApp() ? await getReminderThresholds() : [];
+  const hourlyChime = isDesktopApp() ? await isHourlyChimeEnabled() : false;
   // 자격 증명(.env.local)이 없으면 구글 단추는 눌러도 "설정하세요" 안내만 나온다.
   // 눌러도 아무것도 안 되는 단추를 화면에 두지 않는다 — 채워 넣으면 그때 나타난다.
   const showGoogle = !offline && googleConfigured();
@@ -382,6 +384,7 @@ export default async function Home(props: PageProps<"/">) {
             isDesktop={isDesktopApp()}
             reminderOptions={REMINDER_THRESHOLD_OPTIONS}
             reminderSelected={reminderThresholds}
+            hourlyChime={hourlyChime}
           />
         </div>
         <div className="flex min-w-0 items-center gap-2">
