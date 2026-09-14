@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { hasNote, readNote, subscribeNotes, writeNote } from "./localNotes";
@@ -35,7 +36,9 @@ export default function DayCellInteractive({
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const noted = useSyncExternalStore(subscribeNotes, () => hasNote(date), () => false);
+  const router = useRouter();
 
   useEffect(() => setMounted(true), []);
 
@@ -50,6 +53,50 @@ export default function DayCellInteractive({
     dialog.current?.close();
   }
 
+  /**
+   * 일정 칩(EventDragChip)을 이 날짜 칸에 놓았을 때. 옮기기는 기존 PATCH를 그대로
+   * 쓴다 — 시작일만 보내면 서버가 기간(일수)을 유지한 채 종료일도 같이 옮겨 준다
+   * (EventItem.tsx의 -1일/+1일 버튼과 같은 동작). Ctrl을 누른 채 놓으면 복사다 —
+   * 원본은 그대로 두고 이 날짜에 새 일정을 만든다.
+   */
+  function onDragOver(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes("text/plain")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.ctrlKey ? "copy" : "move";
+    setDragOver(true);
+  }
+
+  function onDragLeave() {
+    setDragOver(false);
+  }
+
+  async function onDrop(e: React.DragEvent) {
+    if (!e.dataTransfer.types.includes("text/plain")) return;
+    e.preventDefault();
+    setDragOver(false);
+    const id = Number(e.dataTransfer.getData("text/plain"));
+    if (!Number.isInteger(id) || id <= 0) return;
+
+    try {
+      if (e.ctrlKey) {
+        await fetch(`/api/events/${id}/duplicate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date }),
+        });
+      } else {
+        await fetch(`/api/events/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date }),
+        });
+      }
+      router.refresh();
+    } catch {
+      // 실패해도 화면은 그대로 둔다 — 일정이 안 옮겨졌으면 다시 시도하면 된다
+    }
+  }
+
   return (
     <>
       <Link
@@ -59,13 +106,18 @@ export default function DayCellInteractive({
         // 더블클릭은 그 앞의 클릭 두 번이 이미 이 날짜로 이동시킨 뒤에 온다 —
         // 같은 날짜를 다시 골라 화면이 안 바뀌므로 막을 필요가 없다.
         onDoubleClick={openMemo}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
         title={
           noted
             ? "더블클릭: 메모 보기·수정 (이 PC에만 저장)"
             : "더블클릭: 메모 남기기 (이 PC에만 저장, 서버에 안 올라감)"
         }
         style={style}
-        className={`relative ${className}`}
+        className={`relative ${className} ${
+          dragOver ? "ring-2 ring-inset ring-accent bg-accent-soft" : ""
+        }`}
       >
         {children}
         {noted && (
