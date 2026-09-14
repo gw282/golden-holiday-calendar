@@ -299,7 +299,11 @@ fn run_notifier(app: &tauri::AppHandle) {
 
     let mut notified: HashSet<(i64, i64)> = HashSet::new();
     let mut notified_date = String::new();
-    let mut last_break = std::time::Instant::now();
+    // 마우스·키보드 움직임까지 보려면 프런트에서 매번 활동 신호를 보내야 해서 복잡해진다.
+    // 대신 "창이 보이는 동안만" 시간을 센다 — 트레이에 숨겨 자리를 비운 시간은
+    // 50분에 포함되지 않는다. 창을 보이는 채로 다른 일을 해도 시간은 그대로 흐르지만,
+    // 적어도 "컴퓨터를 아예 안 쓰고 있는데 알림이 울리는" 경우는 없앤다.
+    let mut active_secs: u64 = 0;
 
     loop {
         thread::sleep(POLL_INTERVAL);
@@ -348,14 +352,21 @@ fn run_notifier(app: &tauri::AppHandle) {
             }
         }
 
-        if last_break.elapsed() >= BREAK_INTERVAL {
+        let visible = app
+            .get_webview_window("main")
+            .and_then(|w| w.is_visible().ok())
+            .unwrap_or(true);
+        if visible {
+            active_secs += POLL_INTERVAL.as_secs();
+        }
+        if active_secs >= BREAK_INTERVAL.as_secs() {
             let _ = app
                 .notification()
                 .builder()
                 .title("50분간 열일하셨습니다")
                 .body("잠시 일어나 스트레칭 해 보세요.")
                 .show();
-            last_break = std::time::Instant::now();
+            active_secs = 0;
         }
     }
 }
