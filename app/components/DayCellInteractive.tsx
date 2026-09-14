@@ -105,9 +105,6 @@ export default function DayCellInteractive({
                   placeholder="예: 오전 10시 주간 회의"
                   className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent"
                 />
-                <p className="mt-1.5 text-[11px] text-muted">
-                  이 메모는 이 기기에만 저장되고, 서버에는 올라가지 않습니다.
-                </p>
               </div>
               <div className="flex justify-end gap-2 border-t border-border px-3 py-2">
                 {draft !== "" && (
