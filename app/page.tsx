@@ -501,8 +501,13 @@ export default async function Home(props: PageProps<"/">) {
                 <div className="absolute left-0 top-full z-20 mt-1 w-[min(32rem,80vw)] rounded-xl border border-border bg-raised p-3 shadow-lg">
                   <p className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2 text-xs font-semibold">
                     <span>
-                      {viewYear}년 공휴일{" "}
-                      <span className="font-normal text-holiday">{holidayDaysInYear}일</span>
+                      {viewYear}년{recsEnabled && " 공휴일"}
+                      {recsEnabled && (
+                        <>
+                          {" "}
+                          <span className="font-normal text-holiday">{holidayDaysInYear}일</span>
+                        </>
+                      )}
                     </span>
                     {/* 칸이 링크라는 것도 안 보이면 같은 실수를 반복한다 */}
                     <span className="font-normal text-[10px] text-muted">
@@ -534,7 +539,11 @@ export default async function Home(props: PageProps<"/">) {
                       })}
                     </div>
                   )}
-                  {briefingRows.length === 0 ? (
+                  {!recsEnabled ? (
+                    <p className="text-[11px] text-muted">
+                      황금연휴 추천을 켜면 월별 공휴일이 보입니다.
+                    </p>
+                  ) : briefingRows.length === 0 ? (
                     <p className="text-[11px] text-muted">공휴일 데이터가 없는 해입니다.</p>
                   ) : (
                     <ul className="grid grid-cols-3 gap-1.5">

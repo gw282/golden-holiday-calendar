@@ -97,22 +97,17 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
           )}
           {/* 이 항목이 무엇을 끄는지는 화면을 봐도 알 수 없다. 무엇이 사라지는지보다
               **무엇이 그대로인지**를 먼저 적는다 — 오프라인이 되는 순간 앱이 반쪽이 되는 게
-              아닌지가 실제로 궁금한 것이기 때문이다. */}
-          <Row term="오프라인">
-            {desktop ? (
-              <>
-                이 설치본은 <span className="text-foreground">사내망 전용으로 항상 오프라인</span>{" "}
-                상태입니다.
-              </>
-            ) : (
-              "설정에서 끌 수 있습니다."
-            )}{" "}
-            달력 · 일정 · 연차 · 연휴 추천은 <span className="text-foreground">그대로 됩니다</span>{" "}
-            (전부 이 PC에서 계산합니다).
-            <br />
-            <span className="text-holiday">안 되는 것</span>은 밖에 닿아야 하는 넷입니다 —
-            항공권·숙소 검색, 환율, 구글 캘린더, 챗봇.
-          </Row>
+              아닌지가 실제로 궁금한 것이기 때문이다. 데스크톱은 항상 오프라인 고정값이라
+              토글도 없고, 도움말도 짧게 가려고 여기서 뺀다. */}
+          {!desktop && (
+            <Row term="오프라인">
+              설정에서 끌 수 있습니다. 달력 · 일정 · 연차 · 연휴 추천은{" "}
+              <span className="text-foreground">그대로 됩니다</span> (전부 이 PC에서 계산합니다).
+              <br />
+              <span className="text-holiday">안 되는 것</span>은 밖에 닿아야 하는 넷입니다 —
+              항공권·숙소 검색, 환율, 구글 캘린더, 챗봇.
+            </Row>
+          )}
           {!desktop && (
             <Row term="회사 내부망">
               설치한 PC에서 프로그램을 실행하면 그 PC의 일정 DB를 사용합니다. 다른 사내 PC에서 함께 보려면 설치한 PC의 사내 IP 주소로 접속해야 합니다.
