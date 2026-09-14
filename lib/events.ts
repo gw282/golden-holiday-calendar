@@ -281,7 +281,7 @@ function normalizeEndDate(v: unknown, start: DateStr): DateStr {
  * MAX_REPEAT_COUNT를 넘어가는 순간 예외를 던진다 — 종료일이 너무 멀어서 조용히
  * 잘리면 사용자가 고른 날짜와 실제로 생긴 마지막 회차가 어긋난다.
  */
-function repeatDates(
+export function repeatDates(
   start: DateStr,
   freq: RepeatFreq,
   spec: { count: number } | { until: DateStr },

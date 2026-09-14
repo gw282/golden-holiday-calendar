@@ -1,8 +1,8 @@
 import { run } from "./db";
 import { holidayMap } from "./calendar";
-import { createEvent, eventExists, ValidationError, type RepeatFreq } from "./events";
+import { createEvent, eventExists, repeatDates, ValidationError, type RepeatFreq } from "./events";
 import { MAX_IMPORT, parseIcs, type RepeatHint } from "./ics";
-import type { DateStr } from "./date";
+import { isValidDateStr, type DateStr } from "./date";
 
 /**
  * `.ics` 가져오기 — **미리보기와 확정을 나눈다.**
@@ -52,8 +52,13 @@ export type PreviewResult = {
 export type Override = {
   /** 넣지 않기 */
   skip?: boolean;
-  /** 반복을 이렇게 만들어라. null이면 반복 없이 한 건만 */
-  repeat?: { freq: RepeatFreq; count: number } | null;
+  /**
+   * 반복을 이렇게 만들어라. null이면 반복 없이 한 건만.
+   * `until`은 "가져올 기간" 끝날짜가 정해져 있을 때만 쓴다 — 반복 횟수(count)를
+   * 그대로 두면 필터로 고른 기간을 넘어 한참 뒤까지 계속 생겨 필터를 무시한
+   * 것처럼 보인다(아래 `applyIcs`의 기간 클램프 참고).
+   */
+  repeat?: { freq: RepeatFreq; count: number } | { freq: RepeatFreq; until: DateStr } | null;
 };
 
 export class ImportError extends Error {}
@@ -167,9 +172,16 @@ export async function applyIcs(
       // 미리보기에서 본 것과 다른 결과가 나오면 미리보기를 둔 뜻이 없다.
       const repeat = normalizeRepeat(o.repeat);
       await createEvent({ ...items[i].input, repeat, importBatchId: batchId });
-      // 반복이면 행이 count개 만들어진다. 화면에 "12건 넣었습니다"라고 적어야 하므로
-      // 파일의 항목 수가 아니라 실제로 생긴 행 수를 센다
-      added += repeat ? repeat.count : 1;
+      // 반복이면 행이 여러 개 만들어진다. 화면에 "12건 넣었습니다"라고 적어야 하므로
+      // 파일의 항목 수가 아니라 실제로 생긴 행 수를 센다. until 모드는 count가 없어서
+      // createEvent와 똑같은 함수로 다시 날짜를 펼쳐 실제 회차 수를 구한다.
+      added += repeat
+        ? repeatDates(
+            items[i].input.date,
+            repeat.freq,
+            "until" in repeat ? { until: repeat.until } : { count: repeat.count },
+          ).length
+        : 1;
     } catch (e) {
       if (e instanceof ValidationError) failed += 1;
       else throw e;
@@ -189,9 +201,12 @@ export async function applyIcs(
 /** 화면이 보낸 반복 값을 믿을 수 있는 범위로 자른다 */
 function normalizeRepeat(
   v: Override["repeat"],
-): { freq: RepeatFreq; count: number } | null {
+): { freq: RepeatFreq; count: number } | { freq: RepeatFreq; until: DateStr } | null {
   if (!v) return null;
   if (!["weekly", "monthly", "yearly"].includes(v.freq)) return null;
+  if ("until" in v) {
+    return isValidDateStr(v.until) ? { freq: v.freq, until: v.until } : null;
+  }
   const count = Math.round(Number(v.count));
   if (!Number.isFinite(count) || count < 2) return null;
   return { freq: v.freq, count };
