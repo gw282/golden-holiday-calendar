@@ -52,6 +52,13 @@ pub fn run() {
             get_autostart
         ])
         .setup(|app| {
+            // 윈도우 토스트 알림에 "황금연휴 캘린더"라고 뜨게 하는 등록. 이게 없으면
+            // 설치형(Win32, MSIX 아님) 앱은 AUMID 문자열(identifier)을 그대로 보여준다.
+            register_toast_display_name(
+                &app.config().identifier,
+                app.config().product_name.as_deref().unwrap_or("황금연휴 캘린더"),
+            );
+
             let hidden_start = std::env::args().any(|a| a == "--hidden");
 
             #[cfg(debug_assertions)]
@@ -173,6 +180,24 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Golden Holiday Calendar");
 }
+
+/// 토스트 알림에 뜨는 발신자 이름을 등록한다. 패키징 안 된(MSIX가 아닌) Win32 앱은
+/// AUMID(`identifier`)와 표시 이름을 연결해 주는 등록이 따로 없으면, Windows가
+/// 알림 발신자 자리에 `identifier` 문자열을 그대로 보여준다 — 매번 켤 때마다
+/// 같은 값으로 덮어쓰므로(멱등) 실행 파일이 최신 이름과 다르게 등록될 일이 없다.
+#[cfg(windows)]
+fn register_toast_display_name(identifier: &str, display_name: &str) {
+    use windows_registry::CURRENT_USER;
+
+    let Ok(key) = CURRENT_USER.create(format!(r"SOFTWARE\Classes\AppUserModelId\{identifier}"))
+    else {
+        return;
+    };
+    let _ = key.set_string("DisplayName", display_name);
+}
+
+#[cfg(not(windows))]
+fn register_toast_display_name(_identifier: &str, _display_name: &str) {}
 
 /// 창 반투명. Tauri에 이걸 위한 크로스플랫폼 API가 없어(진짜 픽셀 단위 투명
 /// `transparent: true`는 생성 시점에만 되고 실행 중엔 못 바꾼다) 레이어드 윈도우를
