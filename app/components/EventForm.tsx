@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import EventFields, { type EventFieldValues } from "./EventFields";
 import type { LeaveTypeOption } from "./leaveDays";
+import { parseQuickInput } from "@/lib/quickParse";
 
 /** 팝업(AddEventButton) 안에서만 쓴다. 바깥 테두리는 dialog가 그리므로 여기선 폼만 그린다. */
 export default function EventForm({
@@ -40,6 +41,27 @@ export default function EventForm({
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [quickText, setQuickText] = useState("");
+
+  /**
+   * "내일 오후 3시 팀 회의" 한 줄을 날짜·시각·제목으로 쪼개 아래 필드에 채운다
+   * (`lib/quickParse.ts`, 외부 API 없는 순수 정규식 파서). 채우기만 하고 바로
+   * 저장하진 않는다 — 파서가 못 알아들은 부분이 있을 수 있어 사람이 한 번 보고
+   * 넘기는 편이 안전하다.
+   */
+  function applyQuick() {
+    const text = quickText.trim();
+    if (!text) return;
+    const parsed = parseQuickInput(text, values.date || defaultDate);
+    setValues((v) => ({
+      ...v,
+      title: parsed.title,
+      date: parsed.date,
+      allDay: parsed.time === null,
+      startTime: parsed.time ?? "",
+    }));
+    setQuickText("");
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +115,31 @@ export default function EventForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
+      <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-2">
+        <input
+          type="text"
+          value={quickText}
+          onChange={(e) => setQuickText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              applyQuick();
+            }
+          }}
+          placeholder="퀵 입력: 내일 오후 3시 팀 회의"
+          disabled={busy}
+          className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
+        />
+        <button
+          type="button"
+          onClick={applyQuick}
+          disabled={busy || !quickText.trim()}
+          className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
+        >
+          채우기
+        </button>
+      </div>
+
       <EventFields
         value={values}
         onChange={setValues}
