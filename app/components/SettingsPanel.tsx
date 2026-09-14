@@ -162,7 +162,7 @@ export default function SettingsPanel({
               </p>
             ) : (
               <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-                온라인 (항공권·숙소·환율·구글)
+                온라인 (항공권·숙소·환율·챗봇)
                 <input
                   type="checkbox"
                   checked={!offline}

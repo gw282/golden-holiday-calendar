@@ -89,30 +89,6 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             <span className="text-foreground">초성만 쳐도</span>{" "}
             (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의) 찾아집니다.
           </Row>
-          {!desktop && (
-            <Row term="항공·숙소">
-              추천이 여러 줄이면 <span className="text-accent">파랗게 표시된 줄</span> 기준입니다.
-              가격은 가져오지 않습니다.
-            </Row>
-          )}
-          {/* 이 항목이 무엇을 끄는지는 화면을 봐도 알 수 없다. 무엇이 사라지는지보다
-              **무엇이 그대로인지**를 먼저 적는다 — 오프라인이 되는 순간 앱이 반쪽이 되는 게
-              아닌지가 실제로 궁금한 것이기 때문이다. 데스크톱은 항상 오프라인 고정값이라
-              토글도 없고, 도움말도 짧게 가려고 여기서 뺀다. */}
-          {!desktop && (
-            <Row term="오프라인">
-              설정에서 끌 수 있습니다. 달력 · 일정 · 연차 · 연휴 추천은{" "}
-              <span className="text-foreground">그대로 됩니다</span> (전부 이 PC에서 계산합니다).
-              <br />
-              <span className="text-holiday">안 되는 것</span>은 밖에 닿아야 하는 넷입니다 —
-              항공권·숙소 검색, 환율, 구글 캘린더, 챗봇.
-            </Row>
-          )}
-          {!desktop && (
-            <Row term="회사 내부망">
-              설치한 PC에서 프로그램을 실행하면 그 PC의 일정 DB를 사용합니다. 다른 사내 PC에서 함께 보려면 설치한 PC의 사내 IP 주소로 접속해야 합니다.
-            </Row>
-          )}
           {desktop && (
             <Row term="닫기 버튼">
               ✕를 눌러도 <span className="text-foreground">종료되지 않고 트레이로 숨습니다.</span>{" "}

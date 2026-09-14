@@ -117,9 +117,9 @@ export default function LeaveBudgetButton({ leaves }: { leaves: LeaveSummary[] }
         {error && <p className="px-4 py-2 text-sm text-red-500">{error}</p>}
 
         <p className="border-t border-border px-4 py-2 text-[11px] leading-relaxed text-muted">
-          쓴 일수는 일정마다 켜 둔 <span className="text-leave">휴가 사용</span>을 더한 값입니다.
-          며칠인지는 기간에서 <span className="text-foreground">주말·공휴일을 빼</span> 자동으로
-          셉니다. 휴가는 <span className="text-foreground">시작일이 속한 주기</span>에 답니다.
+          일정 등록할 때 <span className="text-leave">휴가 사용</span>을 켜면 그만큼 자동으로
+          차감됩니다. <span className="text-foreground">주말·공휴일은 빼고</span> 세고,{" "}
+          <span className="text-foreground">시작일 기준</span>으로 어느 잔고에서 뺄지 정합니다.
         </p>
       </dialog>
     </>
@@ -145,11 +145,6 @@ function LeaveRow({
     <li className="flex flex-col gap-2 px-4 py-3">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-sm font-semibold">{type.name}</span>
-        <span className="text-[11px] text-muted">
-          {type.cycle === "anniversary" ? "입사일 기준" : "1월~12월"}
-          {type.minUnit >= 1 && " · 하루 단위"}
-          {!type.carryOver && " · 소멸"}
-        </span>
         <span className="ml-auto text-[11px] tabular-nums text-muted">
           {period.start} ~ {period.end}
         </span>
