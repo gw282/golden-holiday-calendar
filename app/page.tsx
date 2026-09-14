@@ -47,14 +47,11 @@ import HelpButton from "./components/HelpButton";
 import Hint from "./components/Hint";
 import ThemeToggle from "./components/ThemeToggle";
 import ZoomToggle from "./components/ZoomToggle";
-import WeekNumToggle from "./components/WeekNumToggle";
 import OmniSearch from "./components/OmniSearch";
 import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
-import OfflineToggle from "./components/OfflineToggle";
-import ReminderSettings from "./components/ReminderSettings";
-import RecommendationToggle from "./components/RecommendationToggle";
+import SettingsPanel from "./components/SettingsPanel";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -368,29 +365,24 @@ export default async function Home(props: PageProps<"/">) {
               매일 보는 사람에게는 그냥 소음이라, 궁금할 때만 나오게 했다 */}
           <Hint text="연차 하루를 놓아 연휴를 건넙니다. 달력에서 날짜를 고르면 오른쪽에 그 날이 낀 연휴 조합이 나옵니다.">
             <h1 className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
-              <AppMark />
-              {/* 연휴 추천을 꺼 두면 '황금연휴'라는 이름이 사실과 안 맞는다 —
-                  그 기능이 이름의 근거이기 때문이다 */}
-              {recsEnabled ? "황금연휴 캘린더" : "캘린더"}
+              <img src="/mg-mark.png" alt="새마을금고" className="h-[18px] w-auto shrink-0" />
+              캘린더
             </h1>
           </Hint>
 
           <HelpButton desktop={isDesktopApp()} />
           <ZoomToggle />
           <ThemeToggle />
-          {/* 켜고/끄는 알약 단추들은 한데 모은다 — 크기·모양이 같아서 따로 두면
-              같은 무리라는 게 안 보인다 */}
-          <WeekNumToggle />
-          <RecommendationToggle enabled={recsEnabled} />
-          {/* 알림 시점은 설치본에만 있는 기능이다 — 웹 배포본엔 이 알림 자체가 없다 */}
-          {isDesktopApp() && (
-            <ReminderSettings options={REMINDER_THRESHOLD_OPTIONS} selected={reminderThresholds} />
-          )}
-          {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 배지를 아예 안 띄운다 —
-              사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 계속 밝힌다 */}
-          {!isDesktopApp() && (
-            <OfflineToggle offline={offline} locked={process.env.OFFLINE_DEFAULT === "1"} />
-          )}
+          {/* 황금연휴 추천 · 주차 표시 · 온라인/오프라인 · 알림 시점을 한데 모은 팝업.
+              헤더에 알약 단추를 하나씩 늘어놓지 않는다 */}
+          <SettingsPanel
+            recsEnabled={recsEnabled}
+            offline={offline}
+            offlineLocked={process.env.OFFLINE_DEFAULT === "1"}
+            isDesktop={isDesktopApp()}
+            reminderOptions={REMINDER_THRESHOLD_OPTIONS}
+            reminderSelected={reminderThresholds}
+          />
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다 */}
@@ -496,7 +488,7 @@ export default async function Home(props: PageProps<"/">) {
                   className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-border px-2 py-1 hover:border-accent hover:bg-accent-soft hover:text-accent group-open:border-accent group-open:bg-accent-soft group-open:text-accent [&::-webkit-details-marker]:hidden"
                 >
                   <span className="text-base font-semibold">{viewYear}년</span>
-                  {holidayDaysInYear > 0 && (
+                  {recsEnabled && holidayDaysInYear > 0 && (
                     <span className="text-[10px] text-holiday">공휴일 {holidayDaysInYear}일</span>
                   )}
                   <span
@@ -608,13 +600,16 @@ export default async function Home(props: PageProps<"/">) {
 
             {/* 공휴일 탐색 — 이름을 같이 적어 어디로 가는지 보이게 한다.
                 연도 브리핑이 '한 해를 훑는' 도구라면 이쪽은 '지금 자리에서 다음 쉬는 날'이다.
-                한동안 겹친다고 보고 내렸었는데, 묻는 질문이 서로 달라 되살렸다. */}
-            <div className="flex min-w-0 shrink items-center gap-1">
-              {/* 좁아지면 이 라벨부터 사라진다. 화살표와 이름만 남아도 뜻은 통한다 */}
-              <span className="hidden shrink-0 text-[11px] text-muted sm:inline">공휴일 탐색</span>
-              <HolidayJump holiday={prevHoliday} direction="prev" hrefFor={href} />
-              <HolidayJump holiday={nextHoliday} direction="next" hrefFor={href} />
-            </div>
+                한동안 겹친다고 보고 내렸었는데, 묻는 질문이 서로 달라 되살렸다.
+                황금연휴 추천을 꺼 두면 공휴일 자체에 관심이 없다는 뜻이라 같이 숨긴다. */}
+            {recsEnabled && (
+              <div className="flex min-w-0 shrink items-center gap-1">
+                {/* 좁아지면 이 라벨부터 사라진다. 화살표와 이름만 남아도 뜻은 통한다 */}
+                <span className="hidden shrink-0 text-[11px] text-muted sm:inline">공휴일 탐색</span>
+                <HolidayJump holiday={prevHoliday} direction="prev" hrefFor={href} />
+                <HolidayJump holiday={nextHoliday} direction="next" hrefFor={href} />
+              </div>
+            )}
           </div>
 
           <CalendarGrid
@@ -749,35 +744,6 @@ export default async function Home(props: PageProps<"/">) {
   );
 }
 
-
-/**
- * 제목 앞의 앱 마크. **`app/icon.svg`와 같은 그림이다** — 한쪽을 고치면 다른 쪽도 고칠 것.
- *
- * 달력 한 장에 한 칸만 노랗게 칠한 모양이다. 이 앱이 하는 일이 곧 "달력에서 하루를 골라
- * 연휴로 바꾸는 것"이고, 노랑은 앱 안에서 휴가·연차가 쓰는 색(`eventColors`의 amber)이다.
- *
- * 파일(`<img src="/icon.svg">`)로 불러오지 않고 인라인 SVG로 두는 이유:
- * 요청이 한 번 줄고, 무엇보다 **오프라인에서도 확실히 뜬다.**
- */
-function AppMark() {
-  return (
-    <svg aria-hidden viewBox="0 0 32 32" className="h-[18px] w-[18px] shrink-0">
-      <rect x="3" y="6" width="26" height="23" rx="6" fill="#b7791f" />
-      <path d="M3 12a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v1H3z" fill="#8c5a16" />
-      <rect x="9" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
-      <rect x="20" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
-      <g fill="#ffffff" opacity="0.55">
-        <rect x="8" y="17" width="4" height="4" rx="1.2" />
-        <rect x="20" y="17" width="4" height="4" rx="1.2" />
-        <rect x="8" y="23" width="4" height="4" rx="1.2" />
-        <rect x="14" y="23" width="4" height="4" rx="1.2" />
-        <rect x="20" y="23" width="4" height="4" rx="1.2" />
-      </g>
-      {/* 고른 하루 = 연차 */}
-      <rect x="14" y="17" width="4" height="4" rx="1.2" fill="#ffd166" />
-    </svg>
-  );
-}
 
 /** 앞뒤 공휴일로 건너뛰는 버튼. 갈 곳이 없으면 자리만 비운다 */
 function HolidayJump({

@@ -100,8 +100,9 @@ body {
   }
 }
 
-/* 주차 표시는 취향이라 끌 수 있다. WeekNumToggle이 <html>에 data-week-num을 붙였다 뗀다 —
-   ThemeToggle과 같은 방식(진짜 상태는 속성 하나, React state로 복제하지 않는다) */
+/* 주차 표시는 취향이라 끌 수 있다. 설정 팝업(SettingsPanel)이 <html>에
+   data-week-num을 붙였다 뗀다 — ThemeToggle과 같은 방식(진짜 상태는 속성 하나,
+   React state로 복제하지 않는다) */
 html[data-week-num="off"] .week-num {
   display: none;
 }
