@@ -1,6 +1,6 @@
 [package]
 name = "golden-holiday-calendar"
-version = "0.7.0"
+version = "0.8.0"
 description = "Golden Holiday Calendar desktop shell"
 authors = ["Golden Holiday Calendar"]
 edition = "2021"
