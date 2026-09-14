@@ -20,7 +20,7 @@ const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="light"||t=
  */
 const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(["50","75","125","150","175","200"].indexOf(z)>=0)document.documentElement.style.zoom=z+"%"}catch(e){}`;
 
-/** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. WeekNumToggle과 같은 "weekNum" 키다 */
+/** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. SettingsPanel과 같은 "weekNum" 키다 */
 const WEEK_NUM_SCRIPT = `try{if(localStorage.getItem("weekNum")==="off")document.documentElement.dataset.weekNum="off"}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
