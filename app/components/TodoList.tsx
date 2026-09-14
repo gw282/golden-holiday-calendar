@@ -62,10 +62,17 @@ export default function TodoList() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="할 일을 입력하고 Enter"
+          placeholder="할 일을 입력하세요"
           aria-label="할 일 입력"
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
         />
+        <button
+          type="submit"
+          disabled={!text.trim()}
+          className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
+        >
+          추가
+        </button>
       </form>
 
       {todos.length === 0 ? (
