@@ -83,10 +83,17 @@ export default function BackupButton() {
         // 기간 필터 밖으로 밀려난 항목은 화면에서 체크를 바꿀 수 없었으므로
         // choices에 남아 있는 값과 무관하게 항상 뺀다.
         const skip = c.skip || (item !== undefined && !inRange(item));
-        overrides[index] = {
-          skip,
-          repeat: c.freq && count >= 2 ? { freq: c.freq, count } : null,
-        };
+        // 가져올 기간 끝날짜를 정해 뒀으면 반복도 그 날짜에서 멈춘다. 안 그러면
+        // 필터로 고른 기간 안의 일정 하나가 반복이라는 이유만으로 그 뒤 몇 달치가
+        // 필터와 무관하게 계속 생겨, 기간 필터를 무시한 것처럼 보인다.
+        const repeat = !c.freq
+          ? null
+          : rangeTo
+            ? { freq: c.freq, until: rangeTo }
+            : count >= 2
+              ? { freq: c.freq, count }
+              : null;
+        overrides[index] = { skip, repeat };
       }
       const res = await fetch("/api/ics/apply", {
         method: "POST",
@@ -287,6 +294,7 @@ export default function BackupButton() {
                   item={item}
                   choice={choices[item.index]}
                   onChange={(c) => setChoices((prev) => ({ ...prev, [item.index]: c }))}
+                  untilCap={rangeTo || undefined}
                 />
               ))}
             </ul>
@@ -323,10 +331,13 @@ function Row({
   item,
   choice,
   onChange,
+  untilCap,
 }: {
   item: PreviewItem;
   choice: Choice | undefined;
   onChange: (c: Choice) => void;
+  /** 가져올 기간 끝날짜. 정해져 있으면 반복 횟수 입력 대신 이 날짜에서 멈춘다고 보여 준다 */
+  untilCap?: string;
 }) {
   const c = choice ?? { skip: true, freq: "" as const, count: "1" };
   const span = item.endDate > item.date ? `${short(item.date)}~${short(item.endDate)}` : short(item.date);
@@ -377,19 +388,24 @@ function Row({
             <option value="monthly">매월</option>
             <option value="yearly">매년</option>
           </select>
-          {c.freq && (
-            <>
-              <input
-                type="number"
-                min={2}
-                max={60}
-                value={c.count}
-                onChange={(e) => onChange({ ...c, count: e.target.value })}
-                aria-label={`${item.title} 반복 횟수`}
-                className="w-14 rounded-md border border-border bg-transparent px-1.5 py-0.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:border-accent"
-              />
-              회
-            </>
+          {c.freq && untilCap ? (
+            // 가져올 기간 끝날짜가 있으면 횟수를 따로 안 받는다 — 그 날짜에서 멈춘다
+            <span className="text-muted">{short(untilCap)}까지</span>
+          ) : (
+            c.freq && (
+              <>
+                <input
+                  type="number"
+                  min={2}
+                  max={60}
+                  value={c.count}
+                  onChange={(e) => onChange({ ...c, count: e.target.value })}
+                  aria-label={`${item.title} 반복 횟수`}
+                  className="w-14 rounded-md border border-border bg-transparent px-1.5 py-0.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:border-accent"
+                />
+                회
+              </>
+            )
           )}
           {item.repeat?.guessed && (
             <span className="text-holiday">파일에 횟수가 없어 어림한 값입니다</span>
