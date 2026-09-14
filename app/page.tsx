@@ -365,7 +365,7 @@ export default async function Home(props: PageProps<"/">) {
               매일 보는 사람에게는 그냥 소음이라, 궁금할 때만 나오게 했다 */}
           <Hint text="연차 하루를 놓아 연휴를 건넙니다. 달력에서 날짜를 고르면 오른쪽에 그 날이 낀 연휴 조합이 나옵니다.">
             <h1 className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
-              <img src="/mg-mark.png" alt="새마을금고" className="h-[18px] w-auto shrink-0" />
+              <span aria-hidden className="text-lg leading-none">🤗</span>
               캘린더
             </h1>
           </Hint>
@@ -539,11 +539,7 @@ export default async function Home(props: PageProps<"/">) {
                       })}
                     </div>
                   )}
-                  {!recsEnabled ? (
-                    <p className="text-[11px] text-muted">
-                      황금연휴 추천을 켜면 월별 공휴일이 보입니다.
-                    </p>
-                  ) : briefingRows.length === 0 ? (
+                  {briefingRows.length === 0 ? (
                     <p className="text-[11px] text-muted">공휴일 데이터가 없는 해입니다.</p>
                   ) : (
                     <ul className="grid grid-cols-3 gap-1.5">
@@ -565,11 +561,17 @@ export default async function Home(props: PageProps<"/">) {
                             >
                               <span className="flex items-baseline justify-between gap-1">
                                 <span className="text-xs font-semibold">{Number(mm)}월</span>
-                                <span className="text-[10px] text-muted">{entry.days}일</span>
+                                {/* 월 이동(네비게이션)은 연휴 추천과 무관하게 남긴다 —
+                                    공휴일 며칠·이름만 연휴 추천이 꺼지면 같이 숨긴다 */}
+                                {recsEnabled && (
+                                  <span className="text-[10px] text-muted">{entry.days}일</span>
+                                )}
                               </span>
-                              <span className="truncate text-[11px] text-holiday">
-                                {entry.names.join(" · ")}
-                              </span>
+                              {recsEnabled && (
+                                <span className="truncate text-[11px] text-holiday">
+                                  {entry.names.join(" · ")}
+                                </span>
+                              )}
                             </Link>
                           </li>
                         );
