@@ -25,7 +25,12 @@ export default function DesktopControls() {
   const [mini, setMini] = useState(false);
   const [autostart, setAutostart] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  function errMsg(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+  }
 
   useEffect(() => {
     const tauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -59,21 +64,24 @@ export default function DesktopControls() {
 
   async function applyOpacity(next: number) {
     setOpacityState(next);
+    setError(null);
     try {
       await invoke("set_opacity", { value: next / 100 });
-    } catch {
+    } catch (e) {
       // 실패해도 슬라이더는 그대로 둔다 — 다시 움직이면 된다
+      setError(errMsg(e));
     }
   }
 
   async function toggleMini() {
     const next = !mini;
     setBusy(true);
+    setError(null);
     try {
       await invoke("toggle_mini", { mini: next });
       setMini(next);
-    } catch {
-      // 무시 — 창 크기는 그대로
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -82,11 +90,12 @@ export default function DesktopControls() {
   async function toggleAutostart() {
     const next = !autostart;
     setBusy(true);
+    setError(null);
     try {
       await invoke("set_autostart", { enabled: next });
       setAutostart(next);
-    } catch {
-      // 무시 — 체크 상태는 그대로
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setBusy(false);
     }
@@ -147,6 +156,12 @@ export default function DesktopControls() {
             />
             시작 시 자동 실행
           </label>
+
+          {error && (
+            <p className="rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+              오류: {error}
+            </p>
+          )}
         </div>
       )}
     </div>
