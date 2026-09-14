@@ -1,6 +1,6 @@
 [package]
 name = "golden-holiday-calendar"
-version = "0.14.0"
+version = "0.15.0"
 description = "Golden Holiday Calendar desktop shell"
 authors = ["Golden Holiday Calendar"]
 edition = "2021"
@@ -26,7 +26,13 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # 레이어드 윈도우를 직접 다룬다. wry/webview2-com이 이미 물고 오는 크레이트라
 # 새로 무거워지는 게 아니라 버전만 맞춰 직접 의존성으로 올린 것이다.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  "Win32_Security",
+] }
 # 윈도우 토스트 알림의 발신자 이름 — AUMID(앱 식별자)에 매핑된 DisplayName을
 # 레지스트리에 직접 등록해야 뜬다. 등록하지 않으면 Windows가 identifier 문자열
 # ("com.goldenholidaycalendar.desktop")을 그대로 보여준다.

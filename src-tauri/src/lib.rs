@@ -92,7 +92,17 @@ pub fn run() {
                     .stderr(Stdio::from(stderr));
                 #[cfg(windows)]
                 cmd.creation_flags(CREATE_NO_WINDOW);
-                cmd.spawn()?;
+                let child = cmd.spawn()?;
+                // 이 프로세스가 어떻게 끝나든(정상 종료·트레이 종료·강제 종료) node.exe
+                // 사이드카가 같이 죽도록 Job Object에 묶는다. 이게 없으면 트레이 "종료"로
+                // 앱을 꺼도 사이드카는 살아남아 3210 포트를 붙든 채 백그라운드에 남고,
+                // 다음에 앱을 새로 켜도(재설치해도!) 이미 그 포트가 응답하고 있으니
+                // 새 사이드카를 띄운 줄 알고 사실은 계속 그 옛날 프로세스에 붙는다 —
+                // 아무리 다시 빌드해도 화면이 바뀐 게 하나도 안 보이는 것처럼 보인다.
+                #[cfg(windows)]
+                if let Err(e) = kill_on_close(&child) {
+                    eprintln!("사이드카 Job Object 설정 실패: {e}");
+                }
 
                 for _ in 0..80 {
                     if TcpStream::connect("127.0.0.1:3210").is_ok() {
@@ -179,6 +189,38 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Golden Holiday Calendar");
+}
+
+/// node.exe 사이드카를 Windows Job Object에 묶어, 이 프로세스가 죽는 순간(정상
+/// 종료든 크래시든 작업 관리자로 강제 종료든) OS가 사이드카도 같이 끝내게 만든다.
+/// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`가 핵심 — job에 묶인 프로세스가 하나라도
+/// 살아 있는 동안 이 프로세스의 핸들 테이블이 정리되면(=프로세스 종료) job의
+/// 마지막 핸들도 같이 닫히면서 묶인 프로세스를 전부 죽인다. `HANDLE`은 그냥 숫자
+/// 하나를 감싼 타입이라(Drop이 없다) 따로 닫을 것도, 살려 둘 것도 없다.
+#[cfg(windows)]
+fn kill_on_close(child: &std::process::Child) -> windows::core::Result<()> {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    unsafe {
+        let job = CreateJobObjectW(None, windows::core::PCWSTR::null())?;
+        let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(
+            job,
+            JobObjectExtendedLimitInformation,
+            &info as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+        )?;
+        let process = HANDLE(child.as_raw_handle());
+        AssignProcessToJobObject(job, process)?;
+    }
+    Ok(())
 }
 
 /// 토스트 알림에 뜨는 발신자 이름을 등록한다. 패키징 안 된(MSIX가 아닌) Win32 앱은
