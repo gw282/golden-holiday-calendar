@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import {
   getReminderThresholds,
+  isHourlyChimeEnabled,
   isOffline,
   isRecommendationEnabled,
   REMINDER_THRESHOLD_OPTIONS,
+  setHourlyChimeEnabled,
   setOffline,
   setReminderThresholds,
   setRecommendationEnabled,
@@ -21,6 +23,7 @@ export async function GET() {
     offline: await isOffline(),
     recommendations: await isRecommendationEnabled(),
     reminderThresholds: await getReminderThresholds(),
+    hourlyChime: await isHourlyChimeEnabled(),
   });
 }
 
@@ -29,6 +32,7 @@ export async function PATCH(request: Request) {
     offline?: unknown;
     recommendations?: unknown;
     reminderThresholds?: unknown;
+    hourlyChime?: unknown;
   };
 
   if (body.offline !== undefined) {
@@ -58,9 +62,17 @@ export async function PATCH(request: Request) {
     await setReminderThresholds(body.reminderThresholds);
   }
 
+  if (body.hourlyChime !== undefined) {
+    if (typeof body.hourlyChime !== "boolean") {
+      return NextResponse.json({ error: "hourlyChime은 true/false여야 합니다." }, { status: 400 });
+    }
+    await setHourlyChimeEnabled(body.hourlyChime);
+  }
+
   return NextResponse.json({
     offline: await isOffline(),
     recommendations: await isRecommendationEnabled(),
     reminderThresholds: await getReminderThresholds(),
+    hourlyChime: await isHourlyChimeEnabled(),
   });
 }

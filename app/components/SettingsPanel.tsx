@@ -36,6 +36,19 @@ const REMINDER_LABELS: Record<number, string> = {
   120: "2시간 전",
 };
 
+/**
+ * 자동 실행은 Rust 쪽 `set_autostart`/`get_autostart` 커맨드(tauri-plugin-autostart)를
+ * `window.__TAURI_INTERNALS__.invoke`로 직접 부른다 — `@tauri-apps/api`를 npm
+ * 의존성으로 새로 받는 대신, EventFields.tsx가 Tauri 여부를 판단할 때 쓰는 것과
+ * 같은 전역을 그대로 쓴다.
+ */
+type TauriInternals = { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
+function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const internals = (window as unknown as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
+  if (!internals) return Promise.reject(new Error("Tauri 환경이 아닙니다"));
+  return internals.invoke(cmd, args) as Promise<T>;
+}
+
 export default function SettingsPanel({
   recsEnabled,
   offline,
@@ -43,6 +56,7 @@ export default function SettingsPanel({
   isDesktop,
   reminderOptions,
   reminderSelected,
+  hourlyChime,
 }: {
   recsEnabled: boolean;
   offline: boolean;
@@ -50,14 +64,26 @@ export default function SettingsPanel({
   isDesktop: boolean;
   reminderOptions: readonly number[];
   reminderSelected: number[];
+  hourlyChime: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [, startTransition] = useTransition();
   const [checkedReminders, setCheckedReminders] = useState(new Set(reminderSelected));
+  const [chime, setChime] = useState(hourlyChime);
+  const [autostart, setAutostart] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const weekNum = useSyncExternalStore(subscribeWeekNum, weekNumOn, weekNumOnServer);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    invokeTauri<boolean>("get_autostart")
+      .then(setAutostart)
+      .catch(() => {
+        // 못 읽어도 화면은 기본값(꺼짐)으로 보여 준다
+      });
+  }, [isDesktop]);
 
   useEffect(() => {
     if (!open) return;
@@ -117,6 +143,25 @@ export default function SettingsPanel({
     else next.add(minutes);
     setCheckedReminders(next);
     patchSettings({ reminderThresholds: [...next] });
+  }
+
+  function toggleChime() {
+    const next = !chime;
+    setChime(next);
+    patchSettings({ hourlyChime: next });
+  }
+
+  async function toggleAutostart() {
+    const next = !autostart;
+    setBusy(true);
+    try {
+      await invokeTauri("set_autostart", { enabled: next });
+      setAutostart(next);
+    } catch {
+      // 무시 — 체크 상태는 그대로
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -195,6 +240,31 @@ export default function SettingsPanel({
               {checkedReminders.size === 0 && (
                 <p className="text-[10px] text-muted">전부 끄면 알림이 안 옵니다.</p>
               )}
+
+              {/* 50분 스트레칭 알림(창이 보이는 시간 기준)과는 별개 — 이쪽은
+                  "지금 몇 시인지", 그쪽은 "일한 지 얼마나 됐는지"라 둘 다 켤 수 있다.
+                  정각(예: 3시 정각)이 아니라 앱을 켠 시점부터 1시간 간격이다. */}
+              <label className="flex items-center gap-2 border-t border-border pt-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={chime}
+                  disabled={busy}
+                  onChange={toggleChime}
+                  className="h-3.5 w-3.5 accent-accent"
+                />
+                1시간마다 알림 (앱을 켠 뒤부터)
+              </label>
+
+              <label className="flex items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={autostart}
+                  disabled={busy}
+                  onChange={toggleAutostart}
+                  className="h-3.5 w-3.5 accent-accent"
+                />
+                윈도우 시작 시 자동 실행
+              </label>
             </div>
           )}
         </div>
