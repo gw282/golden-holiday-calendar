@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+const PANEL_OPEN_EVENT = "mg-panel-open";
+
 /**
  * 화면 전체 도움말.
  *
@@ -19,11 +21,25 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
     else dialog.current.close();
   }, [open]);
 
+  useEffect(() => {
+    function closeWhenAnotherPanelOpens(event: Event) {
+      if ((event as CustomEvent<string>).detail !== "help") setOpen(false);
+    }
+    window.addEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
+    return () => window.removeEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
+  }, []);
+
+  function toggleHelp() {
+    const next = !open;
+    if (next) window.dispatchEvent(new CustomEvent(PANEL_OPEN_EVENT, { detail: "help" }));
+    setOpen(next);
+  }
+
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleHelp}
         aria-label="도움말"
         title="도움말"
         // 제목 옆에 붙어서 글자 크기에 따라 찌그러지지 않도록 정원(h=w)으로 고정한다
@@ -62,49 +78,55 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
           <div className="border-b border-border bg-accent-soft/40 px-4 py-3 text-xs">
             <p className="font-semibold text-foreground">처음 시작하는 순서</p>
             <p className="mt-1 leading-relaxed text-muted">
-              ① 달력에서 날짜 선택 → ② 오른쪽의{" "}
-              <span className="font-medium text-foreground">+ 추가</span> → ③ 제목과 날짜 입력 →
-              ④ 저장. 등록한 일정은 선택한 날짜 오른쪽 목록에서 바로 관리합니다.
+              ① 달력에서 날짜 고르기 → ② 오른쪽의{" "}
+              <span className="font-medium text-foreground">+ 일정 추가</span> → ③ 일정 정보 입력 →
+              ④ 저장.
+              <br />
+              저장한 일정은 선택한 날짜의 오른쪽 목록에서 바로 확인하고 관리할 수 있습니다.
             </p>
           </div>
           <dl className="flex flex-col gap-3 p-4 text-xs">
-          {/* 화면 곳곳의 단추·아이콘에 이미 붙어 있는 것(더블클릭 메모, 화면 확대,
-              주차 표시, 색 배지 등)은 여기 또 안 적는다 — 커서를 2초 올려 두면
-              그 자리에서 바로 뜬다. 여기 남는 것은 **어느 한 단추에도 안 걸리는
-              전체 규칙**뿐이다. */}
-          <Row term="일정 등록">
-            제목과 시작일은 필수입니다. 반복 일정은{" "}
-            <span className="text-foreground">횟수</span> 또는{" "}
-            <span className="text-foreground">종료일까지</span> 중 골라 저장하세요.
-          </Row>
-          <Row term="휴가 잔고">
-            <span className="text-foreground">연차는 입사일</span>부터 1년,{" "}
-            <span className="text-foreground">특별휴가는 연말</span>에 사라집니다. 쓴 일수는 주말·공휴일을
-            빼고 자동으로 셉니다.
-          </Row>
-          <Row term="연휴 추천">
-            공휴일이 없는 주에도 아무 날이나 눌러 보세요. 이미 하루 종일 일정이 있는 날은 빠집니다.
-          </Row>
-          <Row term="검색">
-            <span className="text-foreground">초성만 쳐도</span>{" "}
-            (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의) 찾아집니다.
-          </Row>
-          {desktop && (
-            <Row term="닫기 버튼">
-              ✕를 눌러도 <span className="text-foreground">종료되지 않고 트레이로 숨습니다.</span>{" "}
-              완전히 끄려면 트레이 아이콘을 눌러 종료를 고르세요.
+            <Row term="일정 등록">
+              제목과 날짜만으로 등록할 수 있습니다. 여러 날에 걸친 기간이나 특정 시각·시간
+              범위도 설정할 수 있고, 반복 일정은{" "}
+              <span className="text-foreground">횟수</span> 또는{" "}
+              <span className="text-foreground">종료일까지</span> 중 골라 저장하세요.
             </Row>
-          )}
-          <Row term="설정">
-            황금연휴 추천 · 주차 표시{desktop && " · 알림 시점"}은 헤더의{" "}
-            <span className="text-foreground">설정</span>에서 켜고 끕니다.
-          </Row>
-          <Row term="단축키">
-            <Kbd>←</Kbd> <Kbd>→</Kbd> 월 이동 · <Kbd>T</Kbd> 오늘 · <Kbd>N</Kbd> 새 일정 ·{" "}
-            <Kbd>Esc</Kbd> 닫기
-            <br />
-            나머지는 글자에 커서를 <span className="text-foreground">2초</span> 올려 두면 뜹니다.
-          </Row>
+            <Row term="기능 안내">
+              헤더의 <span className="text-foreground">✨ 기능 안내</span>에서 주요 기능과 사용법을
+              확인할 수 있습니다.
+            </Row>
+            <Row term="화면">
+              <span className="text-foreground">비율 조정</span>으로 화면 크기를 바꾸고,{" "}
+              <span className="text-foreground">다크모드·화이트모드</span>로 화면 테마를 선택할 수
+              있습니다.
+            </Row>
+            {desktop && (
+              <Row term="알림 설정">
+                시작 시 알림, 일정 전 알림과 휴식 알림을 조정할 수 있습니다.
+              </Row>
+            )}
+            <Row term="휴가 설정">
+              <span className="text-foreground">연차는 입사일 기준으로 1년마다</span> 갱신되고,{" "}
+              <span className="text-foreground">특별휴가는 연말</span>에 사라집니다. 쓴 일수는 주말·공휴일을
+              빼고 자동으로 계산됩니다.
+            </Row>
+            <Row term="황금연휴">
+              공휴일과 주말 사이에 휴가를 붙여 길게 쉴 수 있는 날짜를 추천합니다.{" "}
+              <span className="text-foreground">황금 연휴</span>에서 추천 기능을 켜거나 끌 수 있고,
+              마음에 드는 조합은 바로 일정으로 등록할 수 있습니다.
+            </Row>
+            <Row term="검색">
+              <span className="text-foreground">초성이나 키워드</span>로 일정을 검색할 수 있습니다.
+              <br />
+              (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의)
+            </Row>
+            <Row term="단축키">
+              <Kbd>←</Kbd> <Kbd>→</Kbd> 월 이동 · <Kbd>T</Kbd> 오늘 · <Kbd>N</Kbd> 새 일정 ·{" "}
+              <Kbd>Ctrl</Kbd>+<Kbd>F</Kbd> 검색 · <Kbd>Esc</Kbd> 닫기
+              <br />
+              나머지는 글자에 커서를 <span className="text-foreground">2초</span> 올려 두면 뜹니다.
+            </Row>
           </dl>
         </div>
       </dialog>
