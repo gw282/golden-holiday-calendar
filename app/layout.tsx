@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "MG 매니지",
-  description: "연차 하루를 놓아 연휴를 건넙니다 — 달력 · 일정 · 연휴 추천을 한 화면에",
+  description: "일정과 연차를 한 화면에서 관리하는 캘린더 — 반복 일정, 휴가 잔고, 황금 연휴 추천까지",
 };
 
 /**
@@ -23,9 +23,6 @@ const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(["50","75","125",
 /** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. SettingsPanel과 같은 "weekNum" 키다 */
 const WEEK_NUM_SCRIPT = `try{if(localStorage.getItem("weekNum")==="off")document.documentElement.dataset.weekNum="off"}catch(e){}`;
 
-/** MG쉬지 모드도 같은 이유로 첫 페인트 전에 붙인다. SettingsPanel.tsx와 같은 "mgSheoji" 키다 */
-const MG_SHEOJI_SCRIPT = `try{if(localStorage.getItem("mgSheoji")==="on")document.documentElement.dataset.mgSheoji="on"}catch(e){}`;
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // 위 스크립트가 서버 HTML에 없던 data-theme을 붙이므로 하이드레이션 경고를 끈다
@@ -34,7 +31,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: ZOOM_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: WEEK_NUM_SCRIPT }} />
-        <script dangerouslySetInnerHTML={{ __html: MG_SHEOJI_SCRIPT }} />
         {children}
       </body>
     </html>

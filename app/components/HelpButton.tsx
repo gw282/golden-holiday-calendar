@@ -86,7 +86,7 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             </p>
           </div>
           <dl className="flex flex-col gap-3 p-4 text-xs">
-            <Row term="일정 등록">
+            <Row term="일정 추가">
               제목과 날짜만으로 등록할 수 있습니다. 여러 날에 걸친 기간이나 특정 시각·시간
               범위도 설정할 수 있고, 반복 일정은{" "}
               <span className="text-foreground">횟수</span> 또는{" "}
@@ -107,12 +107,12 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
               <span className="text-foreground">특별휴가는 연말</span>에 사라집니다. 쓴 일수는 주말·공휴일을
               빼고 자동으로 계산됩니다.
             </Row>
-            <Row term="황금연휴">
+            <Row term="황금 연휴">
               공휴일과 주말 사이에 휴가를 붙여 길게 쉴 수 있는 날짜를 추천합니다.{" "}
               <span className="text-foreground">황금 연휴</span>에서 추천 기능을 켜거나 끌 수 있고,
               마음에 드는 조합은 바로 일정으로 등록할 수 있습니다.
             </Row>
-            <Row term="검색">
+            <Row term="일정 찾기">
               <span className="text-foreground">초성이나 키워드</span>로 일정을 검색할 수 있습니다.
               <br />
               (예: <span className="font-mono">ㅈㄱㅎㅇ</span> → 주간회의)

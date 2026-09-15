@@ -71,7 +71,7 @@ export default function HolidayFinderButton({ enabled }: { enabled: boolean }) {
       {open && (
         <div className="absolute right-0 top-full z-30 mt-1 w-64 rounded-lg border border-border bg-raised p-3 shadow-lg">
           <label className="flex items-center justify-between gap-3 text-xs text-foreground">
-            <span className="font-medium">🌟 황금연휴 추천</span>
+            <span className="font-medium">🌟 황금 연휴 추천</span>
             <input
               type="checkbox"
               checked={enabled}

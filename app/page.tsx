@@ -332,7 +332,7 @@ export default async function Home(props: PageProps<"/">) {
                         "쓰면 이렇게 쉽니다"
                       ) : (
                         <>
-                          쓰는 <span className="font-medium text-leave">🌟 황금연휴</span>
+                          쓰는 <span className="font-medium text-leave">🌟 황금 연휴</span>
                         </>
                       )}
                     </span>
@@ -375,7 +375,7 @@ export default async function Home(props: PageProps<"/">) {
         <div className="flex items-center gap-2">
           {/* 커서를 2초 올려 두면 이 앱이 뭘 하는지가 뜬다. 제목 옆에 부제를 늘 붙여 두면
               매일 보는 사람에게는 그냥 소음이라, 궁금할 때만 나오게 했다 */}
-          <Hint text="일정과 연차를 한 화면에서 관리합니다. 달력에서 날짜를 고르면 오른쪽에 그 날의 일정과 황금연휴가 함께 나옵니다.">
+          <Hint text="일정과 연차를 한 화면에서 관리합니다. 달력에서 날짜를 고르면 오른쪽에 그 날의 일정과 황금 연휴가 함께 나옵니다.">
             <h1 className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
               <img src="/icon.svg" alt="" aria-hidden className="h-5 w-5" />
               <span className="text-accent">MG</span> 매니지
@@ -667,7 +667,7 @@ export default async function Home(props: PageProps<"/">) {
                 </li>
                 {recsEnabled && (
                   <li>
-                    <span className="font-medium text-leave">연차 등록</span>을 누르면 황금연휴 추천이
+                    <span className="font-medium text-leave">연차 등록</span>을 누르면 황금 연휴 추천이
                     바로 일정이 됩니다
                   </li>
                 )}
@@ -732,7 +732,7 @@ export default async function Home(props: PageProps<"/">) {
                   >
                     ▶
                   </span>
-                  {holidayFree ? "연차 쓰면 며칠 쉬나 보기" : "🌟 황금연휴 보기"}
+                  {holidayFree ? "연차 쓰면 며칠 쉬나 보기" : "🌟 황금 연휴 보기"}
                 </summary>
                 {mgShejiPanel}
               </details>
