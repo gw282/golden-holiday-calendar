@@ -57,6 +57,7 @@ import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import SettingsPanel from "./components/SettingsPanel";
 import HolidayFinderButton from "./components/HolidayFinderButton";
+import DDayButton from "./components/DDayButton";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -400,6 +401,7 @@ export default async function Home(props: PageProps<"/">) {
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다 */}
+          <DDayButton events={all} />
           <HolidayFinderButton enabled={recsEnabled} />
           <LeaveBudgetButton leaves={leaves} />
         </div>
