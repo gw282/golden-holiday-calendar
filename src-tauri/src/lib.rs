@@ -39,6 +39,10 @@ const SERVER_HOST: &str = if cfg!(debug_assertions) { "localhost" } else { "127.
 /// 트레이 미니 팝업 창 크기.
 const TRAY_POPUP_SIZE: (f64, f64) = (300.0, 380.0);
 
+/// 전역 퀵 입력창 크기와 단축키. 알프레드/스포트라이트처럼 화면 가운데 뜨는 한 줄짜리 입력창.
+const QUICK_ADD_SIZE: (f64, f64) = (600.0, 76.0);
+const QUICK_ADD_SHORTCUT: &str = "Ctrl+Shift+Space";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -49,12 +53,24 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden".into()]),
         ))
+        // 앱이 트레이에 숨어 있어도(포커스가 없어도) 단축키를 받으려면 OS에 등록해야
+        // 한다 — 일반 keydown 리스너는 우리 창이 포커스를 가졌을 때만 동작한다.
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        toggle_quick_add(app);
+                    }
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             set_opacity,
             toggle_mini,
             set_autostart,
             get_autostart,
-            show_main
+            show_main,
+            hide_quick_add
         ])
         .setup(|app| {
             // 윈도우 토스트 알림에 "황금연휴 캘린더"라고 뜨게 하는 등록. 이게 없으면
@@ -157,6 +173,41 @@ pub fn run() {
                     let _ = tp.hide();
                 }
             });
+
+            // 전역 퀵 입력창(알프레드/스포트라이트 스타일) — 장식도 작업표시줄 항목도
+            // 없이 화면 가운데 떠서, 입력한 문장을 곧장 lib/quickParse.ts로 넘겨
+            // 일정을 만든다. transparent(true)라 창 배경이 페이지가 실제로 그린
+            // 만큼만 보인다 — 둥근 카드 하나만 데스크톱 위에 떠 있는 것처럼 보이는
+            // 이유가 이것이다.
+            let quick_add_url =
+                tauri::WebviewUrl::External(format!("{base_url}/quick-add").parse().unwrap());
+            let quick_add = tauri::WebviewWindowBuilder::new(app, "quickadd", quick_add_url)
+                .title("빠른 일정 추가")
+                .inner_size(QUICK_ADD_SIZE.0, QUICK_ADD_SIZE.1)
+                .resizable(false)
+                .decorations(false)
+                .transparent(true)
+                .always_on_top(true)
+                .skip_taskbar(true)
+                .shadow(false)
+                .center()
+                .visible(false)
+                .build()?;
+
+            let qa = quick_add.clone();
+            quick_add.on_window_event(move |event| {
+                if let WindowEvent::Focused(false) = event {
+                    let _ = qa.hide();
+                }
+            });
+
+            // Ctrl+Shift+Space는 앱이 트레이에 숨어 있어도 OS가 직접 받아 우리에게
+            // 알려준다. 등록이 실패해도(다른 앱이 이미 쓰는 중일 수 있다) 앱 자체는
+            // 그대로 켜져야 하므로 ?로 전체를 실패시키지 않는다.
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+            if let Err(e) = app.global_shortcut().register(QUICK_ADD_SHORTCUT) {
+                eprintln!("전역 단축키 등록 실패: {e}");
+            }
 
             // ── 시스템 트레이 ──────────────────────────────────────────
             // 닫기 버튼은 종료가 아니라 트레이로 숨긴다. 알림 폴링이 창 상태와
@@ -359,6 +410,27 @@ fn show_main(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.set_focus();
+    }
+}
+
+/// 단축키를 누를 때마다 부른다 — 떠 있으면 숨기고, 숨어 있으면 화면 가운데
+/// 다시 띄운다(멀티 모니터에서 활성 모니터가 바뀌었을 수 있어 매번 center()한다).
+fn toggle_quick_add(app: &tauri::AppHandle) {
+    let Some(w) = app.get_webview_window("quickadd") else { return };
+    if w.is_visible().unwrap_or(false) {
+        let _ = w.hide();
+    } else {
+        let _ = w.center();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+/// 퀵 입력창이 Esc를 누르거나 일정을 저장한 직후 스스로를 닫을 때 부른다.
+#[tauri::command]
+fn hide_quick_add(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("quickadd") {
+        let _ = w.hide();
     }
 }
 
