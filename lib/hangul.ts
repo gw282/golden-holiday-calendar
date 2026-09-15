@@ -31,5 +31,9 @@ export function isChosungQuery(query: string): boolean {
 }
 
 export function matchesChosung(text: string, query: string): boolean {
-  return toChosung(text).includes(query);
+  // toChosung은 완성형 음절만 초성으로 바꾸고 공백은 그대로 남긴다(다른 용도에서
+  // 원문 구조를 보존하려는 것). 그런데 "치과 예약"처럼 띄어쓰기가 있는 제목은
+  // 초성이 "ㅊㄱ ㅇㅇ"가 되어, 공백 없이 입력하는 검색어("ㅊㄱㅇㅇ")와 문자열이
+  // 어긋나 아예 안 걸린다. 매칭 비교에서만 공백을 지운다.
+  return toChosung(text).replace(/\s+/g, "").includes(query);
 }
