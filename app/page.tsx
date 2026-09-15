@@ -253,18 +253,7 @@ export default async function Home(props: PageProps<"/">) {
     minUnit: l.type.minUnit,
   }));
 
-  /**
-   * MG쉬지 모드의 "황금연휴 추천기" — 선택한 날짜와 무관하게, 앞으로 넉 달 안에서
-   * 연차 대비 효율이 가장 좋은 연휴 상위 3개를 뽑는다. 이미 있는 bridge.ts 로직을
-   * 그대로 재사용한다(오프라인·로컬 계산이라는 요청 조건을 이미 만족한다) —
-   * 이 화면만을 위한 새 추천 알고리즘을 따로 만들지 않는다.
-   */
-  const restModeCandidates = recsEnabled
-    ? (await collectCandidates({ from: t, to: addDays(t, 120), busyDates: busy }))
-        .filter((c) => c.start >= t)
-        .sort((a, b) => b.efficiency - a.efficiency)
-        .slice(0, 3)
-    : [];
+  // MG쉬지 모드의 "휴가 금고" 카드가 쓴다 — 여러 휴가 종류 중 연차(정렬 첫 번째)를 집는다
   const annualLeave = leaves.find((l) => l.type.sortOrder === 0) ?? leaves[0] ?? null;
 
   // 추천 아래 항공권 줄에 쓸 환율. **환산에 필요한 값만** 넘긴다 —
@@ -287,14 +276,16 @@ export default async function Home(props: PageProps<"/">) {
   /**
    * 그 날 업무 보고용 텍스트. 오른쪽 '그 날 일정' 칸에 붙는 단추라 그 칸이 보여 주는
    * 날짜 하나만 담는다 — 주간으로 묶으면 이 칸에서 보이지도 않는 다른 날짜가 같이
-   * 복사돼 자리와 내용이 어긋난다. `dayEvents`(하루짜리)뿐 아니라 이 날에 걸쳐 있는
-   * 기간 일정(`grid.spanning`)도 합친다.
+   * 복사돼 자리와 내용이 어긋난다.
+   *
+   * `dayEvents`(= listEventsByDate) 하나면 충분하다 — `date <= selected AND
+   * end_date >= selected` 조건이라 하루짜리든 기간 일정이든 이 날에 걸쳐 있으면
+   * 이미 다 들어 있다. 예전엔 여기에 `grid.spanning`에서 다시 뽑은 걸 한 번 더
+   * 합쳤는데, 그러면 **기간 일정이 두 목록에 동시에 들어 있어 줄이 두 번씩** 찍혔다.
+   * 한 줄에 하루짜리·기간 일정을 섞어 담지는 않는다 — 기간 일정은 자기 날짜 범위를
+   * 그대로 적어야(예: "9월 30일~10월 2일") 언제까지인지 알 수 있어서다.
    */
-  const spanningOnSelected = grid.spanning.filter((e) => e.date <= selected && e.endDate >= selected);
-  // 한 줄에 하루짜리·기간 일정을 섞어 담지 않는다 — 기간 일정은 자기 날짜 범위를
-  // 그대로 적어야(예: "9월 30일~10월 2일") 언제까지인지 알 수 있는데, 전부
-  // selected(그 칸의 날짜) 하나로 묶으면 그 정보가 사라진다.
-  const dayCopyLines = [...dayEvents, ...spanningOnSelected].map(
+  const dayCopyLines = dayEvents.map(
     (e) => `- ${formatRangeKo(e.date, e.endDate)}: ${e.title}`,
   );
 
@@ -376,9 +367,10 @@ export default async function Home(props: PageProps<"/">) {
     ) : null;
 
   /**
-   * MG쉬지 모드 전용 화면. 섹션은 둘뿐이다 — "팀원 부재 현황"(공유 폴더 기반)은
-   * 이 앱에 그런 데이터 소스가 없어 이번엔 뺐다. 나중에 실제 소스가 정해지면
-   * 여기 세 번째 <section>으로 넣으면 된다.
+   * MG쉬지 모드 전용 화면. 섹션은 둘 — "내 휴가 금고"(새로 만든 요약 카드)와
+   * "황금연휴 추천"(새로 안 만들고 normal-mode의 recommendation을 그대로 재사용).
+   * "팀원 부재 현황"(공유 폴더 기반)은 이 앱에 그런 데이터 소스가 아직 없어 뺐다 —
+   * 나중에 실제 소스가 정해지면 여기 세 번째 <section>으로 넣으면 된다.
    */
   const restModePanel = (
     <div className="rest-mode">
@@ -408,31 +400,18 @@ export default async function Home(props: PageProps<"/">) {
           )}
         </section>
 
-        <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold">황금연휴 추천기</h2>
-          {restModeCandidates.length === 0 ? (
-            <p className="text-xs text-muted">앞으로 넉 달 안에는 추천할 만한 연휴가 없습니다.</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {restModeCandidates.map((c) => (
-                <li
-                  key={c.start}
-                  className="rounded-lg border border-border bg-background px-3 py-2.5"
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                    <span className="text-sm font-semibold">
-                      {formatShortKo(c.start)} ~ {formatShortKo(c.end)}
-                    </span>
-                    <span className="text-xs text-accent">
-                      연차 {c.leaveCount}일 → {c.totalDays}일 연휴
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-muted">
-                    {c.leaveDates.map(formatShortKo).join(", ")}에 연차를 쓰면 됩니다.
-                  </p>
-                </li>
-              ))}
-            </ul>
+        {/* 여기서 새로 만들지 않고 위 normal-mode가 쓰는 recommendation을 그대로
+            재사용한다 — "황금연휴 추천"은 앱에 하나만 있어야 하는 기능이고, MG쉬지
+            모드용으로 따로 단순화한 버전을 만들면 결국 서로 다른 두 개의 추천이
+            생겨 어느 쪽이 맞는지 헷갈리게 된다. */}
+        <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+          <h2 className="border-b border-border px-4 py-3 text-sm font-semibold">
+            황금연휴 추천
+          </h2>
+          {recommendation ?? (
+            <p className="px-4 py-3 text-xs text-muted">
+              고른 날({formatShortKo(selected)})에는 추천할 연휴가 없습니다.
+            </p>
           )}
         </section>
       </div>

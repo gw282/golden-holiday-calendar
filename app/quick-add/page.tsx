@@ -78,7 +78,8 @@ export default function QuickAddPage() {
         setError(data.error ?? "저장하지 못했습니다.");
         return;
       }
-      close();
+      // 메인 창은 별도 웹뷰라 이 저장을 모른다 — 새로고침까지 시켜야 달력에 보인다
+      invokeTauri("refresh_main_and_hide_quick_add").catch(() => close());
     } catch {
       setError("서버에 연결하지 못했습니다.");
     } finally {
@@ -105,7 +106,12 @@ export default function QuickAddPage() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
+            // 한글 입력 중 마지막 글자가 아직 조합(composition) 중일 때 오는 Enter는
+            // "지금 저장해라"가 아니라 IME가 그 글자를 확정하려고 보내는 것이다.
+            // 이걸 구분 안 하면 "회의"를 다 쳤다고 생각하고 Enter를 눌러도, 실제
+            // text state에는 마지막 글자가 아직 안 들어가 있어 제목이 잘리거나
+            // (trim 후 비어 있으면) 아예 아무 반응이 없는 것처럼 보인다.
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) submit();
           }}
           disabled={saving}
           placeholder="일정을 말하듯 적어보세요 — 내일 오후 3시 팀 회의"
