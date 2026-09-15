@@ -25,6 +25,7 @@ import {
   addDays,
   addMonths,
   formatKo,
+  formatRangeKo,
   formatShortKo,
   isValidDateStr,
   isValidMonthStr,
@@ -275,9 +276,12 @@ export default async function Home(props: PageProps<"/">) {
    * 기간 일정(`grid.spanning`)도 합친다.
    */
   const spanningOnSelected = grid.spanning.filter((e) => e.date <= selected && e.endDate >= selected);
-  const dayCopyLines = [...dayEvents, ...spanningOnSelected].length > 0
-    ? [`- ${formatShortKo(selected)}: ${[...dayEvents, ...spanningOnSelected].map((e) => e.title).join(", ")}`]
-    : [];
+  // 한 줄에 하루짜리·기간 일정을 섞어 담지 않는다 — 기간 일정은 자기 날짜 범위를
+  // 그대로 적어야(예: "9월 30일~10월 2일") 언제까지인지 알 수 있는데, 전부
+  // selected(그 칸의 날짜) 하나로 묶으면 그 정보가 사라진다.
+  const dayCopyLines = [...dayEvents, ...spanningOnSelected].map(
+    (e) => `- ${formatRangeKo(e.date, e.endDate)}: ${e.title}`,
+  );
 
   /**
    * 연휴 추천 덩어리. 자리를 두 군데 쓰기 때문에 변수로 뽑아 둔다 —

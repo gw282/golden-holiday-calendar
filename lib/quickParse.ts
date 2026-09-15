@@ -73,9 +73,10 @@ function extractDate(text: string, base: DateStr): Hit<DateStr> | null {
     if (value) return { value, index: korean.index, length: korean[0].length };
   }
 
-  const relative = /모레|내일|오늘/.exec(text);
+  const relative = /글피|모레|내일|오늘/.exec(text);
   if (relative) {
-    const days = relative[0] === "모레" ? 2 : relative[0] === "내일" ? 1 : 0;
+    const days =
+      relative[0] === "글피" ? 3 : relative[0] === "모레" ? 2 : relative[0] === "내일" ? 1 : 0;
     return { value: addDays(base, days), index: relative.index, length: relative[0].length };
   }
 

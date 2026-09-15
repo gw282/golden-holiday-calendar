@@ -140,6 +140,25 @@ export function formatShortKo(s: DateStr): string {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${weekdayKo(s)})`;
 }
 
+/**
+ * 며칠에 걸친 일정의 날짜 표기 — 업무 보고용 복사(CopyDayButton)에 쓴다.
+ * 하루짜리는 '9월 25일', 같은 달 안이면 '9월 25일~27일', 달이 바뀌면
+ * '9월 30일~10월 2일'처럼 끝 날짜에도 달을 다시 적는다 — 달을 안 적으면
+ * "30일~2일"만 보고는 어느 쪽이 먼저인지, 심지어 몇 달인지도 알 수 없다.
+ */
+export function formatRangeKo(from: DateStr, to: DateStr): string {
+  const a = parseDate(from);
+  const b = parseDate(to);
+  const am = a.getUTCMonth() + 1;
+  const ad = a.getUTCDate();
+  const bm = b.getUTCMonth() + 1;
+  const bd = b.getUTCDate();
+
+  if (from === to) return `${am}월 ${ad}일`;
+  if (am === bm) return `${am}월 ${ad}일~${bd}일`;
+  return `${am}월 ${ad}일~${bm}월 ${bd}일`;
+}
+
 
 /* ── 시각(HH:MM) 유틸 — 겹침 검사용 ───────────────────────────────── */
 
