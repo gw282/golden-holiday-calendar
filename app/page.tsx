@@ -54,6 +54,7 @@ import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import SettingsPanel from "./components/SettingsPanel";
+import MgSheojiToggle from "./components/MgSheojiToggle";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -252,6 +253,20 @@ export default async function Home(props: PageProps<"/">) {
     minUnit: l.type.minUnit,
   }));
 
+  /**
+   * MG쉬지 모드의 "황금연휴 추천기" — 선택한 날짜와 무관하게, 앞으로 넉 달 안에서
+   * 연차 대비 효율이 가장 좋은 연휴 상위 3개를 뽑는다. 이미 있는 bridge.ts 로직을
+   * 그대로 재사용한다(오프라인·로컬 계산이라는 요청 조건을 이미 만족한다) —
+   * 이 화면만을 위한 새 추천 알고리즘을 따로 만들지 않는다.
+   */
+  const restModeCandidates = recsEnabled
+    ? (await collectCandidates({ from: t, to: addDays(t, 120), busyDates: busy }))
+        .filter((c) => c.start >= t)
+        .sort((a, b) => b.efficiency - a.efficiency)
+        .slice(0, 3)
+    : [];
+  const annualLeave = leaves.find((l) => l.type.sortOrder === 0) ?? leaves[0] ?? null;
+
   // 추천 아래 항공권 줄에 쓸 환율. **환산에 필요한 값만** 넘긴다 —
   // 환율표 전체를 늘어놓으면 달력보다 커진다. 못 받아도 화면은 그대로 그려진다 (lib/fx.ts 참고).
   // 오프라인이면 **부르지도 않는다.** 화면에서 감추기만 하면 서버는 여전히 밖으로 나가려다
@@ -359,6 +374,71 @@ export default async function Home(props: PageProps<"/">) {
                   />
                 </div>
     ) : null;
+
+  /**
+   * MG쉬지 모드 전용 화면. 섹션은 둘뿐이다 — "팀원 부재 현황"(공유 폴더 기반)은
+   * 이 앱에 그런 데이터 소스가 없어 이번엔 뺐다. 나중에 실제 소스가 정해지면
+   * 여기 세 번째 <section>으로 넣으면 된다.
+   */
+  const restModePanel = (
+    <div className="rest-mode">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold">내 휴가 금고</h2>
+          {annualLeave && annualLeave.total !== null ? (
+            <>
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="text-2xl font-bold text-leave">
+                  {fmtRestNum(annualLeave.remaining ?? 0)}일
+                </span>
+                <span className="text-xs text-muted">/ {fmtRestNum(annualLeave.total)}일</span>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full rounded-full bg-leave transition-[width] duration-700 ease-out"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, ((annualLeave.remaining ?? 0) / annualLeave.total) * 100))}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted">소멸까지 {annualLeave.daysLeft}일 남았습니다.</p>
+            </>
+          ) : (
+            <p className="text-xs text-muted">연차 총 일수를 먼저 넣어 주세요.</p>
+          )}
+        </section>
+
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold">황금연휴 추천기</h2>
+          {restModeCandidates.length === 0 ? (
+            <p className="text-xs text-muted">앞으로 넉 달 안에는 추천할 만한 연휴가 없습니다.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {restModeCandidates.map((c) => (
+                <li
+                  key={c.start}
+                  className="rounded-lg border border-border bg-background px-3 py-2.5"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                    <span className="text-sm font-semibold">
+                      {formatShortKo(c.start)} ~ {formatShortKo(c.end)}
+                    </span>
+                    <span className="text-xs text-accent">
+                      연차 {c.leaveCount}일 → {c.totalDays}일 연휴
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-muted">
+                    {c.leaveDates.map(formatShortKo).join(", ")}에 연차를 쓰면 됩니다.
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+
   return (
     <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-6">
       <Onboarding />
@@ -372,10 +452,11 @@ export default async function Home(props: PageProps<"/">) {
           <Hint text="연차 하루를 놓아 연휴를 건넙니다. 달력에서 날짜를 고르면 오른쪽에 그 날이 낀 연휴 조합이 나옵니다.">
             <h1 className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
               <span aria-hidden className="text-lg leading-none">🤗</span>
-              캘린더
+              <span className="text-accent">MG</span> 매니지
             </h1>
           </Hint>
 
+          <MgSheojiToggle />
           <HelpButton desktop={isDesktopApp()} />
           <ZoomToggle />
           <ThemeToggle />
@@ -397,6 +478,10 @@ export default async function Home(props: PageProps<"/">) {
         </div>
       </header>
 
+      {/* MG쉬지 모드(MgSheojiToggle)가 켜지면 이 블록 전체가 숨고 restModePanel이
+          대신 보인다 — 진짜 상태는 <html data-mg-sheoji>뿐이고(globals.css가 가른다),
+          두 블록 다 서버가 이미 그려서 내보낸다. 켤 때마다 다시 계산할 이유가 없다. */}
+      <div className="normal-mode">
       {/* 달력보다 위, 한 줄. 둘 다 **날짜와 무관하게 전체 일정**을 다루는 도구라 나란히 둔다 —
           다가오는 일정은 앞을 내다보고, 검색은 뒤를 되짚는다.
           아래 달력/일정과 **같은 12칸 격자(7:5)**를 쓴다. 폭이 어긋나면 네 칸이
@@ -742,6 +827,9 @@ export default async function Home(props: PageProps<"/">) {
           )}
         </div>
       </div>
+      </div>
+
+      {restModePanel}
 
       {/* 백업과 구글 연동은 하루에 한 번도 안 누르는 것들이라 맨 아래에 조용히 둔다.
           구글 쪽은 붙여 놓기만 하면 알아서 도는 것이 목적이라 더 그렇다 */}
@@ -815,6 +903,11 @@ function LeaveChip({ label, active, href }: { label: string; active: boolean; hr
  * '추석 연휴'·'개천절 대체공휴일'은 같은 연휴의 일부라 한 이름으로 묶고,
  * '제9회 전국동시지방선거일'처럼 긴 이름은 줄여야 카드 폭이 무너지지 않는다.
  */
+/** 15 -> '15', 12.5 -> '12.5' — MG쉬지 모드의 휴가 금고 카드에 쓴다 */
+function fmtRestNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
+}
+
 function shortHolidayName(name: string): string {
   return name
     .replace(/ 대체공휴일$/, "")
