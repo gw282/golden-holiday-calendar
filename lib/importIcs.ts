@@ -147,8 +147,12 @@ export async function applyIcs(
   overrides: Record<number, Override>,
 ): Promise<ApplyResult> {
   const { items } = parseIcs(text);
-  if (items.length > MAX_IMPORT) {
-    throw new ImportError(`한 번에 ${MAX_IMPORT}건까지만 넣을 수 있습니다. (${items.length}건)`);
+  // 파일 전체 건수가 아니라 **실제로 넣을 건수**(skip 안 된 것)로 상한을 잰다.
+  // 기간 필터로 945건짜리 파일에서 20건만 골랐는데 파일 전체 건수로 막으면,
+  // 정작 그 필터 기능을 쓸수록 더 자주 막히는 앞뒤가 안 맞는 상황이 된다.
+  const toInsert = items.filter((_, i) => !overrides[i]?.skip).length;
+  if (toInsert > MAX_IMPORT) {
+    throw new ImportError(`한 번에 ${MAX_IMPORT}건까지만 넣을 수 있습니다. (${toInsert}건)`);
   }
 
   const { lastInsertRowid } = await run(

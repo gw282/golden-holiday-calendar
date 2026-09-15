@@ -264,6 +264,14 @@ export default function BackupButton() {
                   기간 지우기
                 </button>
               )}
+              {/* 파일 전체가 한 번에 넣을 수 있는 상한(MAX_IMPORT)을 넘으면, 기간을 좁혀서
+                  줄이라고 여기서 바로 알려 준다 — 안 그러면 "넣기"를 눌러야만 실패
+                  메시지로 알게 된다 */}
+              {preview.tooMany && !rangeFrom && !rangeTo && (
+                <span className="text-holiday">
+                  파일이 너무 큽니다 — 기간을 좁혀 주세요
+                </span>
+              )}
             </div>
 
             <p className="border-b border-border px-4 py-2 text-[11px] text-muted">
