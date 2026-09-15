@@ -31,7 +31,7 @@ const LIGHT = "#ffffff";
 export const EVENT_COLORS: EventColor[] = [
   { key: "blue", label: "업무", hex: "#2563eb", fg: LIGHT },
   { key: "green", label: "개인", hex: "#10b981", fg: DARK },
-  { key: "amber", label: "휴가 · 연차", hex: "#f59e0b", fg: DARK },
+  { key: "amber", label: "휴가", hex: "#f59e0b", fg: DARK },
   { key: "red", label: "중요", hex: "#dc2626", fg: LIGHT },
   { key: "purple", label: "약속", hex: "#7c3aed", fg: LIGHT },
   { key: "gray", label: "기타", hex: "#4b5563", fg: LIGHT },
