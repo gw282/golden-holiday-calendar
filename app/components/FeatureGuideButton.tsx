@@ -79,7 +79,7 @@ export default function FeatureGuideButton({ desktop = false }: { desktop?: bool
             <FeatureCard icon="✅" title="업무 보조" detail="날짜별 한 줄 메모와 할 일을 따로 관리하고, 선택한 날짜의 일정을 업무보고용 텍스트로 복사할 수 있습니다.">
               날짜별 메모와 할 일을 관리하고 업무보고용 텍스트를 복사합니다.
             </FeatureCard>
-            <FeatureCard icon="⚙️" title="개인 설정" detail="테마와 화면 확대를 바꾸고 황금 연휴 추천을 켜거나 끌 수 있습니다. 윈도우 앱에서는 일정 알림 시점과 1시간 간격 휴식 알림도 설정할 수 있습니다.">
+            <FeatureCard icon="⚙️" title="개인 설정" detail="테마와 화면 확대·축소를 바꾸고 황금 연휴 추천을 켜거나 끌 수 있습니다. 윈도우 앱에서는 일정 알림 시점과 1시간 간격 휴식 알림도 설정할 수 있습니다.">
               테마, 확대 비율, 황금 연휴 추천과 알림 설정을 조정합니다.
             </FeatureCard>
             {desktop && (

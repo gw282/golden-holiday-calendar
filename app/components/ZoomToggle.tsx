@@ -25,7 +25,7 @@ function subscribe(onChange: () => void) {
 }
 
 /**
- * 화면 확대 배율 선택 (50~200%). 모니터가 작거나 눈이 침침한 사무실 환경을 위한 것.
+ * 화면 확대·축소 배율 선택 (50~200%). 모니터가 작거나 눈이 침침한 사무실 환경을 위한 것.
  *
  * CSS `zoom`을 쓴다 — Tauri/Electron이 둘 다 Chromium 기반 WebView라 표준은 아니어도
  * 안정적으로 지원되고, `transform: scale`과 달리 레이아웃 폭이 실제로 다시 흐른다
@@ -90,8 +90,8 @@ export default function ZoomToggle() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title="화면 확대 (Ctrl + 마우스 휠로도 조정됩니다)"
-        aria-label={`화면 확대 ${zoom}%`}
+        title="화면 확대·축소 (Ctrl + 마우스 휠로도 조정됩니다)"
+        aria-label={`화면 확대·축소 ${zoom}%`}
         className="flex h-5 shrink-0 items-center rounded-full border border-border px-1.5 text-[10px] font-medium leading-none tabular-nums text-muted hover:border-accent hover:bg-accent-soft hover:text-accent"
       >
         {zoom}%
