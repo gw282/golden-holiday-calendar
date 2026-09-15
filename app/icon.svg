@@ -4,25 +4,15 @@
   App Router는 `app/icon.svg`를 두면 알아서 <link rel="icon">을 박아 준다 —
   layout.tsx를 고칠 필요가 없다. 기존 `app/favicon.ico`(Next 기본값)보다 우선한다.
 
-  그림은 **달력 한 장에 한 칸만 노랗게** 칠한 것이다. 이 앱이 하는 일이 곧
-  "달력에서 하루를 골라 연휴로 바꾸는 것"이고, 노랑은 앱 안에서 휴가·연차가 쓰는 색이다.
-  16px에서 읽혀야 하므로 점은 여섯 개까지만 두고 숫자나 글자는 넣지 않는다.
+  데스크톱 설치본 아이콘(build/icon.svg → src-tauri/icons/*, `npx tauri icon`으로 생성)과
+  같은 그림을 쓴다 — 달력 줄 넷(호박색)과 고리 둘(회색). 앱 안팎에서 아이콘이 갈라지지
+  않게 하나의 소스를 그대로 맞춰 옮겼다(원본의 C2PA 메타데이터만 뺐다 — 파비콘은 매
+  페이지 로드마다 받는 파일이라 가볍게 유지한다).
 -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <!-- 몸통 -->
-  <rect x="3" y="6" width="26" height="23" rx="6" fill="#b7791f" />
-  <!-- 머리띠. 아래쪽 모서리는 각지게 두려고 사각형을 겹쳐 덮는다 -->
-  <path d="M3 12a6 6 0 0 1 6-6h14a6 6 0 0 1 6 6v1H3z" fill="#8c5a16" />
-  <!-- 고리 둘 -->
-  <rect x="9" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
-  <rect x="20" y="2" width="3" height="6" rx="1.5" fill="#8c5a16" />
-  <!-- 날짜 칸. 가운데 한 칸만 노랑 = 연차 하루 -->
-  <g fill="#ffffff" opacity="0.55">
-    <rect x="8" y="17" width="4" height="4" rx="1.2" />
-    <rect x="20" y="17" width="4" height="4" rx="1.2" />
-    <rect x="8" y="23" width="4" height="4" rx="1.2" />
-    <rect x="14" y="23" width="4" height="4" rx="1.2" />
-    <rect x="20" y="23" width="4" height="4" rx="1.2" />
-  </g>
-  <rect x="14" y="17" width="4" height="4" rx="1.2" fill="#ffd166" />
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <circle cx="50" cy="50" r="26" fill="#C5CCD4" />
+  <circle cx="206" cy="206" r="26" fill="#C5CCD4" />
+  <rect x="102" y="24" width="130" height="52" rx="26" fill="#FFC043" />
+  <rect x="24" y="102" width="208" height="52" rx="26" fill="#FFC043" />
+  <rect x="24" y="180" width="130" height="52" rx="26" fill="#FFC043" />
 </svg>
