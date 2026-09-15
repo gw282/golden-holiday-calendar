@@ -110,7 +110,7 @@ html[data-week-num="off"] .week-num {
 /*
  * MG쉬지 모드 — 업무 화면(.normal-mode)과 힐링 화면(.rest-mode)을 바꿔 끼운다.
  * 둘 다 서버가 이미 그려서 내려보낸 채로 있고, 여기서 보일지만 정한다
- * (MgSheojiToggle.tsx가 <html data-mg-sheoji>를 붙였다 뗀다).
+ * (SettingsPanel.tsx의 "MG쉬지 모드" 체크박스가 <html data-mg-sheoji>를 붙였다 뗀다).
  * display:none은 opacity 트랜지션을 못 타므로, 새로 나타나는 쪽에 짧은
  * fade-in 애니메이션을 걸어 "부드러운 전환" 요구를 채운다.
  */
