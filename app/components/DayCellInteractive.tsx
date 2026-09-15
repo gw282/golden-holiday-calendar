@@ -3,13 +3,21 @@
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { hasNote, readNote, subscribeNotes, writeNote } from "./localNotes";
+import {
+  hasEmoji,
+  hasNote,
+  readEmoji,
+  readNote,
+  subscribeNotes,
+  writeEmoji,
+  writeNote,
+} from "./localNotes";
 
 /**
  * 달력 셀의 얇은 클라이언트 리프.
  *
  * CalendarGrid.tsx는 계속 서버 컴포넌트로 남는다 — 월/주 레이아웃과 띠(band) 계산은
- * 그대로 서버에서 하고, 이 파일은 셀 하나를 감싸 더블클릭 메모 팝업과 메모 점 표시만
+ * 그대로 서버에서 하고, 이 파일은 셀 하나를 감싸 더블클릭 메모·이모지 팝업과 그 표시만
  * 더한다. children은 서버가 이미 계산해 둔 내용(공휴일명·일정 미리보기)을 그대로 받아
  * 다시 계산하지 않는다.
  *
@@ -34,19 +42,23 @@ export default function DayCellInteractive({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState("");
+  const [emojiDraft, setEmojiDraft] = useState("");
   const [mounted, setMounted] = useState(false);
   const noted = useSyncExternalStore(subscribeNotes, () => hasNote(date), () => false);
+  const emoji = useSyncExternalStore(subscribeNotes, () => readEmoji(date), () => "");
 
   useEffect(() => setMounted(true), []);
 
   function openMemo() {
     setDraft(readNote(date));
+    setEmojiDraft(readEmoji(date));
     dialog.current?.showModal();
   }
 
   function save(e: React.FormEvent) {
     e.preventDefault();
     writeNote(date, draft);
+    writeEmoji(date, emojiDraft);
     dialog.current?.close();
   }
 
@@ -60,19 +72,22 @@ export default function DayCellInteractive({
         // 같은 날짜를 다시 골라 화면이 안 바뀌므로 막을 필요가 없다.
         onDoubleClick={openMemo}
         title={
-          noted
-            ? "더블클릭: 메모 보기·수정 (이 PC에만 저장)"
-            : "더블클릭: 메모 남기기 (이 PC에만 저장, 서버에 안 올라감)"
+          noted || emoji
+            ? "더블클릭: 메모·이모지 보기·수정"
+            : "더블클릭: 메모·이모지 남기기"
         }
         style={style}
         className={`relative ${className}`}
       >
         {children}
-        {noted && (
-          <span
-            aria-hidden
-            className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent"
-          />
+        {/* 날짜 숫자가 이미 셀 왼쪽 위를 쓰고 있어서(서버가 그리는 Cell), 이모지·메모
+            표시는 오른쪽 위 한 자리에 같이 묶어 둔다 — 각자 absolute로 따로 두면
+            겹치기 쉽다. */}
+        {(emoji || noted) && (
+          <span aria-hidden className="absolute right-1 top-0.5 flex items-center gap-0.5">
+            {emoji && <span className="text-sm leading-none">{emoji}</span>}
+            {noted && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+          </span>
         )}
       </Link>
 
@@ -87,7 +102,7 @@ export default function DayCellInteractive({
           >
             <form onSubmit={save}>
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <h2 className="text-xs font-semibold">{date} 메모</h2>
+                <h2 className="text-xs font-semibold">{date} 메모 · 이모지</h2>
                 <button
                   type="button"
                   onClick={() => dialog.current?.close()}
@@ -97,22 +112,33 @@ export default function DayCellInteractive({
                   ✕
                 </button>
               </div>
-              <div className="p-3">
+              <div className="flex gap-2 p-3">
+                <input
+                  value={emojiDraft}
+                  onChange={(e) => setEmojiDraft(e.target.value)}
+                  placeholder="🎂"
+                  maxLength={8}
+                  aria-label="날짜 칸에 표시할 이모지"
+                  title="날짜 칸 오른쪽 위에 표시됩니다"
+                  className="w-12 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
+                />
                 <input
                   autoFocus
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="예: 오전 10시 주간 회의"
-                  className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent"
+                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent"
                 />
               </div>
               <div className="flex justify-end gap-2 border-t border-border px-3 py-2">
-                {draft !== "" && (
+                {(draft !== "" || emojiDraft !== "") && (
                   <button
                     type="button"
                     onClick={() => {
                       setDraft("");
+                      setEmojiDraft("");
                       writeNote(date, "");
+                      writeEmoji(date, "");
                       dialog.current?.close();
                     }}
                     className="rounded-md px-2 py-1 text-xs text-muted hover:text-foreground"

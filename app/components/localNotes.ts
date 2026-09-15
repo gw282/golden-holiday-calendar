@@ -10,13 +10,14 @@
  * localStorage에 있고, 이 파일은 그걸 읽고/쓰고/바뀜을 알리기만 한다.
  */
 const KEY = "local-day-notes";
+const EMOJI_KEY = "local-day-emoji";
 const CHANGED = "localnoteschange";
 
 type NoteMap = Record<string, string>;
 
-function readAll(): NoteMap {
+function readMap(key: string): NoteMap {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as NoteMap) : {};
   } catch {
     // 파싱 실패(손상된 값)나 접근 불가(프라이빗 창) — 메모가 없는 것으로 취급한다
@@ -24,9 +25,9 @@ function readAll(): NoteMap {
   }
 }
 
-function writeAll(notes: NoteMap) {
+function writeMap(key: string, map: NoteMap) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(notes));
+    localStorage.setItem(key, JSON.stringify(map));
   } catch {
     // 저장 실패해도 화면은 계속 써야 한다 — 이 앱의 나머지는 메모와 무관하다
   }
@@ -34,19 +35,41 @@ function writeAll(notes: NoteMap) {
 }
 
 export function readNote(date: string): string {
-  return readAll()[date] ?? "";
+  return readMap(KEY)[date] ?? "";
 }
 
 /** 빈 문자열로 저장하면 그 날짜 키 자체를 지운다 — 빈 메모가 계속 쌓이지 않게 */
 export function writeNote(date: string, text: string) {
-  const notes = readAll();
+  const notes = readMap(KEY);
   if (text.trim() === "") delete notes[date];
   else notes[date] = text;
-  writeAll(notes);
+  writeMap(KEY, notes);
 }
 
 export function hasNote(date: string): boolean {
   return readNote(date) !== "";
+}
+
+/**
+ * 날짜 칸에 붙이는 이모지 스티커. 메모와 같은 이유로 DB를 안 거친다 —
+ * "이 날 출장" "이 날 생일" 같은 걸 한눈에 표시하는 용도라 텍스트 검색·정렬
+ * 대상이 될 필요가 없다. 메모와 별도 키에 저장해서, 이모지만 찍고 메모는
+ * 안 남기는 경우에도 서로 안 얽힌다.
+ */
+export function readEmoji(date: string): string {
+  return readMap(EMOJI_KEY)[date] ?? "";
+}
+
+export function writeEmoji(date: string, emoji: string) {
+  const emojis = readMap(EMOJI_KEY);
+  const trimmed = emoji.trim();
+  if (trimmed === "") delete emojis[date];
+  else emojis[date] = trimmed;
+  writeMap(EMOJI_KEY, emojis);
+}
+
+export function hasEmoji(date: string): boolean {
+  return readEmoji(date) !== "";
 }
 
 export function subscribeNotes(onChange: () => void) {
