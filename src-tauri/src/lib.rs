@@ -70,7 +70,8 @@ pub fn run() {
             set_autostart,
             get_autostart,
             show_main,
-            hide_quick_add
+            hide_quick_add,
+            refresh_main_and_hide_quick_add
         ])
         .setup(|app| {
             // 윈도우 토스트 알림에 "황금연휴 캘린더"라고 뜨게 하는 등록. 이게 없으면
@@ -417,13 +418,14 @@ fn show_main(app: tauri::AppHandle) {
 /// 다시 띄운다(멀티 모니터에서 활성 모니터가 바뀌었을 수 있어 매번 center()한다).
 fn toggle_quick_add(app: &tauri::AppHandle) {
     let Some(w) = app.get_webview_window("quickadd") else { return };
-    if w.is_visible().unwrap_or(false) {
-        let _ = w.hide();
-    } else {
-        let _ = w.center();
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
+    // 껐다 켰다(toggle)로 했다가 뺐다 — 단축키를 살짝만 오래 눌러도 Windows가
+    // 키 반복(auto-repeat)으로 Pressed를 여러 번 보내는데, 그때마다 보였다 숨었다를
+    // 반복해서 사용자 입장에서는 "입력창이 사라졌다 나타났다" 하며 방금 친 글자가
+    // 어디로 갔는지 알 수 없게 됐다. 이제는 항상 보이고 포커스를 준다 — 닫는 건
+    // Esc나 저장 완료, 포커스아웃뿐이라 더 예측 가능하다.
+    let _ = w.center();
+    let _ = w.show();
+    let _ = w.set_focus();
 }
 
 /// 퀵 입력창이 Esc를 누르거나 일정을 저장한 직후 스스로를 닫을 때 부른다.
@@ -431,6 +433,22 @@ fn toggle_quick_add(app: &tauri::AppHandle) {
 fn hide_quick_add(app: tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("quickadd") {
         let _ = w.hide();
+    }
+}
+
+/// 퀵 입력창에서 저장에 **성공했을 때만** 부른다. 메인 창은 별도 웹뷰라
+/// 퀵 입력창이 만든 일정을 알 도리가 없다 — router.refresh()는 그 페이지를
+/// 그린 React 트리 안에서만 뜻이 있어서 바깥(다른 웹뷰)에서는 못 부른다.
+/// 그래서 메인 창에 직접 새로고침 스크립트를 흘려 넣는다. 취소(Esc)나
+/// 단순 포커스아웃으로 닫힐 때는 안 부른다 — 아무것도 안 바뀌었는데
+/// 화면을 새로고침하면 사용자가 보던 자리(스크롤 등)만 잃는다.
+#[tauri::command]
+fn refresh_main_and_hide_quick_add(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("quickadd") {
+        let _ = w.hide();
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.eval("window.location.reload()");
     }
 }
 
