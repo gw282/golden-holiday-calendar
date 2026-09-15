@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { invoke } from "@tauri-apps/api/core";
 
 /**
- * 헤더에 따로따로 있던 켜고/끄는 단추들(황금연휴 추천 · 주차 표시 · 온라인/오프라인 ·
+ * 헤더에 따로따로 있던 켜고/끄는 단추들(황금연휴 · 주차 표시 · 온라인/오프라인 ·
  * 알림 시점)을 하나의 "설정" 팝업으로 모았다. 하나씩 알약 단추로 늘어놓으니 헤더가
  * 좁은 화면에서 줄바꿈이 잦고, 뭐가 기능 토글이고 뭐가 테마·확대 같은 화면 설정인지
  * 구분도 안 됐다 — 여기 모인 건 전부 **DB나 localStorage에 저장되는 기능 on/off**다.
@@ -17,6 +18,7 @@ import { useRouter } from "next/navigation";
 
 const WEEK_NUM_KEY = "weekNum";
 const WEEK_NUM_CHANGED = "weeknumchange";
+const PANEL_OPEN_EVENT = "mg-panel-open";
 
 function weekNumOn(): boolean {
   return document.documentElement.dataset.weekNum !== "off";
@@ -29,46 +31,6 @@ function subscribeWeekNum(onChange: () => void) {
   return () => window.removeEventListener(WEEK_NUM_CHANGED, onChange);
 }
 
-/**
- * MG쉬지 모드 — 원래 헤더에 별도 🌴 버튼으로 따로 있었는데, "황금연휴 추천"
- * on/off 옆에 있는 게 자연스럽다는 피드백을 받아 설정 팝업 안으로 옮겼다.
- * 키(`mgSheoji`)와 `<html data-mg-sheoji>` 속성 이름은 app/layout.tsx의 첫
- * 페인트 스크립트, globals.css의 선택자와 그대로 맞춰야 해서 안 바꿨다 —
- * 자리만 옮기고 저장 방식은 그대로다.
- */
-const MG_SHEOJI_KEY = "mgSheoji";
-const MG_SHEOJI_CHANGED = "mgsheojichange";
-
-function mgSheojiOn(): boolean {
-  return document.documentElement.dataset.mgSheoji === "on";
-}
-function mgSheojiOnServer(): boolean {
-  return false;
-}
-function subscribeMgSheoji(onChange: () => void) {
-  window.addEventListener(MG_SHEOJI_CHANGED, onChange);
-  return () => window.removeEventListener(MG_SHEOJI_CHANGED, onChange);
-}
-function applyMgSheoji(next: boolean) {
-  const root = document.documentElement;
-  if (next) {
-    root.dataset.mgSheoji = "on";
-    try {
-      localStorage.setItem(MG_SHEOJI_KEY, "on");
-    } catch {
-      // 무시 — 이번 세션 안에서는 그대로 적용된다
-    }
-  } else {
-    delete root.dataset.mgSheoji;
-    try {
-      localStorage.removeItem(MG_SHEOJI_KEY);
-    } catch {
-      // 무시
-    }
-  }
-  window.dispatchEvent(new Event(MG_SHEOJI_CHANGED));
-}
-
 const REMINDER_LABELS: Record<number, string> = {
   15: "15분 전",
   30: "30분 전",
@@ -76,35 +38,22 @@ const REMINDER_LABELS: Record<number, string> = {
   120: "2시간 전",
 };
 
-/**
- * 자동 실행은 Rust 쪽 `set_autostart`/`get_autostart` 커맨드(tauri-plugin-autostart)를
- * `window.__TAURI_INTERNALS__.invoke`로 직접 부른다 — `@tauri-apps/api`를 npm
- * 의존성으로 새로 받는 대신, EventFields.tsx가 Tauri 여부를 판단할 때 쓰는 것과
- * 같은 전역을 그대로 쓴다.
- */
-type TauriInternals = { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
-function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const internals = (window as unknown as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
-  if (!internals) return Promise.reject(new Error("Tauri 환경이 아닙니다"));
-  return internals.invoke(cmd, args) as Promise<T>;
-}
-
 export default function SettingsPanel({
-  recsEnabled,
   offline,
   offlineLocked,
   isDesktop,
   reminderOptions,
   reminderSelected,
   hourlyChime,
+  startTimeReminder,
 }: {
-  recsEnabled: boolean;
   offline: boolean;
   offlineLocked: boolean;
   isDesktop: boolean;
   reminderOptions: readonly number[];
   reminderSelected: number[];
   hourlyChime: boolean;
+  startTimeReminder: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -112,19 +61,12 @@ export default function SettingsPanel({
   const [, startTransition] = useTransition();
   const [checkedReminders, setCheckedReminders] = useState(new Set(reminderSelected));
   const [chime, setChime] = useState(hourlyChime);
-  const [autostart, setAutostart] = useState(false);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const weekNum = useSyncExternalStore(subscribeWeekNum, weekNumOn, weekNumOnServer);
-  const mgSheoji = useSyncExternalStore(subscribeMgSheoji, mgSheojiOn, mgSheojiOnServer);
-
-  useEffect(() => {
-    if (!isDesktop) return;
-    invokeTauri<boolean>("get_autostart")
-      .then(setAutostart)
-      .catch(() => {
-        // 못 읽어도 화면은 기본값(꺼짐)으로 보여 준다
-      });
-  }, [isDesktop]);
+  // 주차 표시 로직은 유지하되 현재 설정 팝업에서는 노출하지 않는다.
+  void weekNum;
+  void applyWeekNum;
 
   useEffect(() => {
     if (!open) return;
@@ -141,6 +83,14 @@ export default function SettingsPanel({
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    function closeWhenAnotherPanelOpens(event: Event) {
+      if ((event as CustomEvent<string>).detail !== "settings") setOpen(false);
+    }
+    window.addEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
+    return () => window.removeEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
+  }, []);
 
   function applyWeekNum(next: boolean) {
     const root = document.documentElement;
@@ -192,14 +142,21 @@ export default function SettingsPanel({
     patchSettings({ hourlyChime: next });
   }
 
-  async function toggleAutostart() {
-    const next = !autostart;
+  function toggleStartTimeReminder() {
+    patchSettings({ startTimeReminder: !startTimeReminder });
+  }
+
+  async function testNotification() {
     setBusy(true);
+    setNotifyError(null);
     try {
-      await invokeTauri("set_autostart", { enabled: next });
-      setAutostart(next);
-    } catch {
-      // 무시 — 체크 상태는 그대로
+      await invoke("test_notification");
+    } catch (error) {
+      // Tauri는 Result<T, String> 커맨드가 실패하면 Err 문자열 그대로로
+      // reject한다(Error 인스턴스가 아니다) — instanceof Error만 보면 원인이 가려진다.
+      const reason =
+        error instanceof Error ? error.message : typeof error === "string" ? error : null;
+      setNotifyError(reason ? `알림을 띄우지 못했습니다: ${reason}` : "알림을 띄우지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -209,127 +166,118 @@ export default function SettingsPanel({
     <div ref={rootRef} className="relative inline-block">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        title="설정"
+        onClick={() => {
+          const next = !open;
+          if (next) window.dispatchEvent(new CustomEvent(PANEL_OPEN_EVENT, { detail: "settings" }));
+          setOpen(next);
+        }}
+        title="알림 설정"
         className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
       >
-        ⚙ 설정
+        ⚙ 알림 설정
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-30 mt-1 flex w-60 flex-col gap-3 rounded-lg border border-border bg-raised p-3 shadow-lg">
-          <div className="flex flex-col gap-1">
-            <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-              황금연휴 추천
-              <input
-                type="checkbox"
-                checked={recsEnabled}
-                disabled={busy}
-                onChange={() => patchSettings({ recommendations: !recsEnabled })}
-                className="h-3.5 w-3.5 accent-accent"
-              />
-            </label>
-            <p className="text-[10px] leading-snug text-muted">
-              끄면 아래 MG쉬지 모드의 추천 카드도 같이 빕니다.
-            </p>
-          </div>
-
-          {/* 황금연휴 추천이 꺼져 있으면 MG쉬지 모드로 보여줄 내용(휴가 금고 +
-              그 추천)도 반쪽짜리가 된다 — 추천 on/off 바로 밑에 붙여서 두 기능이
-              한 묶음이라는 걸 자리로도 보여준다 */}
-          <div className="flex flex-col gap-1">
-            <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-              🌴 MG쉬지 모드
-              <input
-                type="checkbox"
-                checked={mgSheoji}
-                onChange={() => applyMgSheoji(!mgSheoji)}
-                className="h-3.5 w-3.5 accent-accent"
-              />
-            </label>
-            <p className="text-[10px] leading-snug text-muted">
-              업무 화면 대신 휴가 금고·황금연휴 추천 화면을 보여줍니다.
-            </p>
-          </div>
-
-          <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-            달력 주차 표시
-            <input
-              type="checkbox"
-              checked={weekNum}
-              onChange={() => applyWeekNum(!weekNum)}
-              className="h-3.5 w-3.5 accent-accent"
-            />
-          </label>
-
+        <div className="absolute left-0 top-full z-30 mt-1 flex w-72 flex-col gap-4 rounded-lg border border-border bg-raised p-3 shadow-lg">
           {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 이 자리에 아예 안 둔다 —
               사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 다룬다 */}
           {!isDesktop &&
             (offlineLocked ? (
-              <p className="text-[11px] text-muted">
-                오프라인 — 회사 내부망용이라 항상 꺼져 있습니다
-              </p>
+              <div className="border-b border-border pb-3">
+                <p className="text-[11px] font-semibold text-muted">인터넷 연결</p>
+                <p className="mt-1 text-[10px] leading-snug text-muted">
+                  회사 내부망용이라 온라인 기능은 사용할 수 없습니다.
+                </p>
+              </div>
             ) : (
-              <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-                온라인 (항공권·숙소·환율·챗봇)
-                <input
-                  type="checkbox"
-                  checked={!offline}
-                  disabled={busy}
-                  onChange={() => patchSettings({ offline: !offline })}
-                  className="h-3.5 w-3.5 accent-accent"
-                />
-              </label>
+              <div className="border-b border-border pb-3">
+                <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+                  온라인 기능
+                  <input
+                    type="checkbox"
+                    checked={!offline}
+                    disabled={busy}
+                    onChange={() => patchSettings({ offline: !offline })}
+                    className="h-3.5 w-3.5 accent-accent"
+                  />
+                </label>
+                <p className="mt-1 text-[10px] leading-snug text-muted">
+                  항공권·숙소·환율·챗봇 기능을 사용합니다.
+                </p>
+              </div>
             ))}
 
           {/* 알림 시점은 설치본에만 있는 기능이다 — 웹 배포본엔 이 알림 자체가 없다 */}
           {isDesktop && (
-            <div className="flex flex-col gap-1.5 border-t border-border pt-2.5">
-              <span className="text-[11px] text-muted">일정 알림 시점</span>
-              {reminderOptions.map((minutes) => (
-                <label
-                  key={minutes}
-                  className="flex items-center gap-2 text-xs text-foreground"
-                >
+            <>
+              <div>
+                <h3 className="text-xs font-semibold text-foreground">일정 알림</h3>
+                <p className="mt-1 text-[10px] leading-snug text-muted">
+                  일정 시작 전에 미리 알림을 받을 시간을 선택하세요.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+                  시작 시 알림
                   <input
                     type="checkbox"
-                    checked={checkedReminders.has(minutes)}
+                    checked={startTimeReminder}
                     disabled={busy}
-                    onChange={() => toggleReminder(minutes)}
+                    onChange={toggleStartTimeReminder}
                     className="h-3.5 w-3.5 accent-accent"
                   />
-                  {REMINDER_LABELS[minutes] ?? `${minutes}분 전`}
                 </label>
-              ))}
-              {checkedReminders.size === 0 && (
-                <p className="text-[10px] text-muted">전부 끄면 알림이 안 옵니다.</p>
+                {reminderOptions.map((minutes) => (
+                  <label
+                    key={minutes}
+                    className="flex items-center justify-between gap-2 text-xs text-foreground"
+                  >
+                    {REMINDER_LABELS[minutes] ?? `${minutes}분 전`}
+                    <input
+                      type="checkbox"
+                      checked={checkedReminders.has(minutes)}
+                      disabled={busy}
+                      onChange={() => toggleReminder(minutes)}
+                      className="h-3.5 w-3.5 accent-accent"
+                    />
+                  </label>
+                ))}
+              </div>
+
+              {checkedReminders.size === 0 && !startTimeReminder && (
+                <p className="text-[10px] text-muted">
+                  알림 시점을 하나 이상 켜야 일정 알림을 받을 수 있습니다.
+                </p>
               )}
 
-              {/* 50분 스트레칭 알림(창이 보이는 시간 기준)과는 별개 — 이쪽은
-                  "지금 몇 시인지", 그쪽은 "일한 지 얼마나 됐는지"라 둘 다 켤 수 있다.
-                  정각(예: 3시 정각)이 아니라 앱을 켠 시점부터 1시간 간격이다. */}
-              <label className="flex items-center gap-2 border-t border-border pt-2 text-xs text-foreground">
+              <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
+                <div>
+                  <h3 className="text-xs font-semibold text-foreground">휴식 알림</h3>
+                  <p className="mt-1 text-[10px] text-muted">앱을 켠 뒤 1시간 간격으로 알려 줍니다.</p>
+                </div>
                 <input
                   type="checkbox"
                   checked={chime}
                   disabled={busy}
                   onChange={toggleChime}
-                  className="h-3.5 w-3.5 accent-accent"
+                  className="h-3.5 w-3.5 shrink-0 accent-accent"
+                  aria-label="휴식 알림 (1시간 간격)"
                 />
-                1시간마다 알림 (앱을 켠 뒤부터)
-              </label>
+              </div>
 
-              <label className="flex items-center gap-2 text-xs text-foreground">
-                <input
-                  type="checkbox"
-                  checked={autostart}
-                  disabled={busy}
-                  onChange={toggleAutostart}
-                  className="h-3.5 w-3.5 accent-accent"
-                />
-                윈도우 시작 시 자동 실행
-              </label>
-            </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={testNotification}
+                className="w-full rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                🔔 알림 테스트
+              </button>
+              {notifyError && (
+                <p className="text-[10px] leading-relaxed text-holiday">{notifyError}</p>
+              )}
+            </>
           )}
         </div>
       )}

@@ -14,12 +14,15 @@ use std::os::windows::process::CommandExt;
 use chrono::Local;
 use serde::Deserialize;
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     LogicalSize, Manager, WindowEvent,
 };
-use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_notification::NotificationExt;
+
+#[cfg(windows)]
+use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 
 /// 기본 창 크기. 미니 모드에서 되돌아올 때도 이 값을 쓴다 — 사용자가 직접 늘려 놓은
 /// 크기까지 기억하려면 상태를 따로 저장해야 하는데, 그 정도로 자주 쓰는 기능은 아니다.
@@ -36,10 +39,69 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const SERVER_PORT: &str = if cfg!(debug_assertions) { "3000" } else { "3210" };
 const SERVER_HOST: &str = if cfg!(debug_assertions) { "localhost" } else { "127.0.0.1" };
 
+#[tauri::command]
+fn test_notification(app: tauri::AppHandle) -> Result<(), String> {
+    let (title, body) = random_notification_phrase();
+    // 실제 일정 알림·휴식 알림과 문구가 같아서, 테스트로 눌러 본 건지 진짜
+    // 알림이 온 건지 구분이 안 됐다. 제목 앞에 표시를 박아 둔다.
+    app.notification()
+        .builder()
+        .title(format!("(테스트 알림) {title}"))
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_ics_file(path: String, contents: String) -> Result<(), String> {
+    fs::write(path, contents).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_todo_widget(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("todo-widget") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "todo-widget",
+        tauri::WebviewUrl::External(
+            format!("http://{SERVER_HOST}:{SERVER_PORT}/widget")
+                .parse()
+                .map_err(|e| format!("위젯 주소를 만들 수 없습니다: {e}"))?,
+        ),
+    )
+    .title("오늘의 할 일")
+    .inner_size(320.0, 360.0)
+    .min_inner_size(260.0, 180.0)
+    .transparent(true)
+    .decorations(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .resizable(true)
+    .visible(true)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    #[cfg(windows)]
+    {
+        window
+            .set_ignore_cursor_events(false)
+            .map_err(|e| e.to_string())?;
+        start_todo_widget_cursor_guard(window);
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         // `--hidden` 인자로 켜면(자동 실행 시) 트레이에만 조용히 자리잡는다.
         // 로그인 직후 창이 불쑥 뜨는 것보다 이쪽이 방해가 덜하다.
         .plugin(tauri_plugin_autostart::init(
@@ -49,8 +111,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_opacity,
             toggle_mini,
-            set_autostart,
-            get_autostart
+            test_notification,
+            open_todo_widget,
+            save_ics_file
         ])
         .setup(|app| {
             // 이름을 "황금연휴 캘린더"에서 "MG 매니지"로 바꾸면서 앱 데이터 폴더
@@ -139,7 +202,7 @@ pub fn run() {
             // 갱신이 안 되는 등 신뢰도가 떨어져 걷어내고 메인 창을 바로 여는 단순한
             // 동작으로 되돌렸다.
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().cloned().unwrap())
+                .icon(Image::from_bytes(include_bytes!("../icons/icon.png"))?)
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -197,6 +260,44 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Golden Holiday Calendar");
+}
+
+#[cfg(windows)]
+fn start_todo_widget_cursor_guard(window: tauri::WebviewWindow) {
+    thread::spawn(move || {
+        let mut ignoring = false;
+        loop {
+            if !window.is_visible().unwrap_or(false) {
+                thread::sleep(Duration::from_millis(100));
+                continue;
+            }
+
+            let inside = match (window.outer_position(), window.outer_size()) {
+                (Ok(position), Ok(size)) => {
+                    let mut cursor = windows::Win32::Foundation::POINT::default();
+                    if unsafe { GetCursorPos(&mut cursor) }.is_ok() {
+                        let x = i64::from(cursor.x);
+                        let y = i64::from(cursor.y);
+                        let left = i64::from(position.x);
+                        let top = i64::from(position.y);
+                        let right = left + i64::from(size.width);
+                        let bottom = top + i64::from(size.height);
+                        x >= left && x < right && y >= top && y < bottom
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            };
+
+            let should_ignore = !inside;
+            if should_ignore != ignoring {
+                let _ = window.set_ignore_cursor_events(should_ignore);
+                ignoring = should_ignore;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    });
 }
 
 /// node.exe 사이드카를 Windows Job Object에 묶어, 이 프로세스가 죽는 순간(정상
@@ -297,18 +398,6 @@ fn toggle_mini(window: tauri::WebviewWindow, mini: bool) -> Result<(), String> {
     window.set_always_on_top(mini).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let mgr = app.autolaunch();
-    let result = if enabled { mgr.enable() } else { mgr.disable() };
-    result.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
-    app.autolaunch().is_enabled().map_err(|e| e.to_string())
-}
-
 /// 배포본 사이드카 데이터 폴더이자, 아침 요약 발송 여부 같은 자잘한 상태 파일을
 /// 두는 자리이기도 하다 — 그래서 개발 모드에서도 그대로 쓸 수 있게 cfg를 걷어냈다.
 ///
@@ -381,15 +470,41 @@ fn random_hourly_phrase() -> (&'static str, &'static str) {
     HOURLY_PHRASES[(nanos as usize) % HOURLY_PHRASES.len()]
 }
 
+const TEST_NOTIFICATION_PHRASES: [(&str, &str); 7] = [
+    ("일정 알림 테스트", "곧 일정이 시작돼요. 오늘도 고생했어요! 💪"),
+    ("일정 시작 알림", "잠시 후 일정이 시작됩니다. 힘내세요! ✨"),
+    HOURLY_PHRASES[0],
+    HOURLY_PHRASES[1],
+    HOURLY_PHRASES[2],
+    HOURLY_PHRASES[3],
+    HOURLY_PHRASES[4],
+];
+
+fn random_notification_phrase() -> (&'static str, &'static str) {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    TEST_NOTIFICATION_PHRASES[(nanos as usize) % TEST_NOTIFICATION_PHRASES.len()]
+}
+
 #[derive(Deserialize, Default)]
 struct SettingsResponse {
     #[serde(rename = "reminderThresholds")]
     reminder_thresholds: Vec<i64>,
     #[serde(rename = "hourlyChime", default)]
     hourly_chime: bool,
+    #[serde(rename = "startTimeReminder", default = "default_start_time_reminder")]
+    start_time_reminder: bool,
+    #[serde(rename = "notificationTest", default)]
+    notification_test: String,
 }
 
-/// 화면의 '알림 시점'·'1시간마다 알림' 체크박스가 저장한 값을 그대로 읽어 온다.
+fn default_start_time_reminder() -> bool {
+    true
+}
+
+/// 화면의 '알림 시점'·'시작시간 알림'·'1시간 간격 알림' 체크박스가 저장한 값을 그대로 읽어 온다.
 /// 앱을 다시 켤 필요 없이 다음 폴링(최대 30초 뒤)부터 반영되게 하려고 매번 새로 불러온다.
 fn fetch_settings() -> SettingsResponse {
     let url = format!("http://127.0.0.1:{SERVER_PORT}/api/settings");
@@ -417,6 +532,7 @@ fn run_notifier(app: &tauri::AppHandle) {
 
     let mut notified: HashSet<(i64, i64)> = HashSet::new();
     let mut notified_date = String::new();
+    let mut last_notification_test = String::new();
     // 스트레칭 알림 기준 — 앱을 켠 시점(이 스레드가 시작된 시점)부터 흐른 시간.
     // 정각(예: 3시 정각)에 맞추는 게 아니라 실행 후 60분마다다. 한때 "창이 보이는
     // 시간만" 세는 50분짜리 알림을 따로 뒀는데, 알림이 두 종류로 나뉘어 헷갈리기만
@@ -434,6 +550,18 @@ fn run_notifier(app: &tauri::AppHandle) {
 
         let settings = fetch_settings();
 
+        if !settings.notification_test.is_empty()
+            && settings.notification_test != last_notification_test
+        {
+            let _ = app
+                .notification()
+                .builder()
+                .title("알림 테스트")
+                .body("윈도우 알림이 정상적으로 작동합니다.")
+                .show();
+            last_notification_test = settings.notification_test.clone();
+        }
+
         if let Ok(events) = fetch_today_events(&today) {
             let thresholds = settings.reminder_thresholds.clone();
             let now_min = hhmm_to_min(&Local::now().format("%H:%M").to_string());
@@ -449,8 +577,21 @@ fn run_notifier(app: &tauri::AppHandle) {
                 }
                 // 이 일정에 따로 정한 시점이 있으면 그것만 쓰고, 없으면 전역 목록을 쓴다.
                 let event_thresholds: Vec<i64> = match e.reminder_minutes {
-                    Some(n) => vec![n],
-                    None => thresholds.clone(),
+                    Some(-1) => vec![0],
+                    Some(n) => {
+                        let mut values = vec![n];
+                        if n != 0 && settings.start_time_reminder {
+                            values.push(0);
+                        }
+                        values
+                    }
+                    None => {
+                        let mut values = thresholds.clone();
+                        if settings.start_time_reminder {
+                            values.push(0);
+                        }
+                        values
+                    }
                 };
                 for &threshold in &event_thresholds {
                     if diff > threshold || notified.contains(&(e.id, threshold)) {
