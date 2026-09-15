@@ -18,7 +18,7 @@ import { addDays, today } from "./date";
  * (`MANUAL_HOLIDAYS`)은 규칙으로 못 만들어서, 멀리 있는 해일수록 그 두 종류만
  * 빠질 수 있다는 점은 그대로다.
  */
-const HOLIDAY_YEARS = 10;
+const HOLIDAY_YEARS = 9;
 
 /**
  * 공휴일 시드 판. `lib/holidays.ts`의 **규칙을 고치면 이 수를 올린다.**
