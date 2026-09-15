@@ -33,7 +33,7 @@ function askForPassword(): NextResponse {
     status: 401,
     headers: {
       // realm은 브라우저 암호 창에 그대로 뜬다. 헤더라서 ASCII로만 적는다.
-      "WWW-Authenticate": 'Basic realm="Golden Holiday Calendar", charset="UTF-8"',
+      "WWW-Authenticate": 'Basic realm="MG Manage", charset="UTF-8"',
     },
   });
 }

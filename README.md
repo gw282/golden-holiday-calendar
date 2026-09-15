@@ -1,4 +1,4 @@
-# 황금연휴 캘린더
+# MG 매니지
 
 연차를 **언제 쓰면 가장 오래 쉬는지** 찾아 주는 한 화면짜리 일정 관리 앱.
 
@@ -70,7 +70,7 @@ npm run tauri:dev      # 개발 중 미리보기 (내부적으로 npm run dev를
 npm run tauri:build    # 설치 파일 생성
 ```
 
-빌드 결과: `src-tauri/target/release/bundle/nsis/황금연휴 캘린더_<버전>_x64-setup.exe`
+빌드 결과: `src-tauri/target/release/bundle/nsis/MG 매니지_<버전>_x64-setup.exe`
 
 설치본에만 있는 것:
 

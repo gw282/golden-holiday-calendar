@@ -1,12 +1,12 @@
 [package]
-name = "golden-holiday-calendar"
-version = "0.26.0"
+name = "mg-manage"
+version = "0.27.0"
 description = "MG 매니지 데스크톱 셸"
 authors = ["MG 매니지"]
 edition = "2021"
 
 [lib]
-name = "golden_holiday_calendar_lib"
+name = "mg_manage_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -16,7 +16,6 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
-tauri-plugin-global-shortcut = "2"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # 로컬 서버(127.0.0.1)만 찌르는 동기 폴링이라 tokio 비동기 스택 없이 가벼운 동기 클라이언트로 충분하다
@@ -36,7 +35,7 @@ windows = { version = "0.61", features = [
 ] }
 # 윈도우 토스트 알림의 발신자 이름 — AUMID(앱 식별자)에 매핑된 DisplayName을
 # 레지스트리에 직접 등록해야 뜬다. 등록하지 않으면 Windows가 identifier 문자열
-# ("com.goldenholidaycalendar.desktop")을 그대로 보여준다.
+# ("com.mgmanage.desktop")을 그대로 보여준다.
 windows-registry = "0.5"
 
 [features]

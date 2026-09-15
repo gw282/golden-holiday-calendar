@@ -29,6 +29,46 @@ function subscribeWeekNum(onChange: () => void) {
   return () => window.removeEventListener(WEEK_NUM_CHANGED, onChange);
 }
 
+/**
+ * MG쉬지 모드 — 원래 헤더에 별도 🌴 버튼으로 따로 있었는데, "황금연휴 추천"
+ * on/off 옆에 있는 게 자연스럽다는 피드백을 받아 설정 팝업 안으로 옮겼다.
+ * 키(`mgSheoji`)와 `<html data-mg-sheoji>` 속성 이름은 app/layout.tsx의 첫
+ * 페인트 스크립트, globals.css의 선택자와 그대로 맞춰야 해서 안 바꿨다 —
+ * 자리만 옮기고 저장 방식은 그대로다.
+ */
+const MG_SHEOJI_KEY = "mgSheoji";
+const MG_SHEOJI_CHANGED = "mgsheojichange";
+
+function mgSheojiOn(): boolean {
+  return document.documentElement.dataset.mgSheoji === "on";
+}
+function mgSheojiOnServer(): boolean {
+  return false;
+}
+function subscribeMgSheoji(onChange: () => void) {
+  window.addEventListener(MG_SHEOJI_CHANGED, onChange);
+  return () => window.removeEventListener(MG_SHEOJI_CHANGED, onChange);
+}
+function applyMgSheoji(next: boolean) {
+  const root = document.documentElement;
+  if (next) {
+    root.dataset.mgSheoji = "on";
+    try {
+      localStorage.setItem(MG_SHEOJI_KEY, "on");
+    } catch {
+      // 무시 — 이번 세션 안에서는 그대로 적용된다
+    }
+  } else {
+    delete root.dataset.mgSheoji;
+    try {
+      localStorage.removeItem(MG_SHEOJI_KEY);
+    } catch {
+      // 무시
+    }
+  }
+  window.dispatchEvent(new Event(MG_SHEOJI_CHANGED));
+}
+
 const REMINDER_LABELS: Record<number, string> = {
   15: "15분 전",
   30: "30분 전",
@@ -75,6 +115,7 @@ export default function SettingsPanel({
   const [autostart, setAutostart] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const weekNum = useSyncExternalStore(subscribeWeekNum, weekNumOn, weekNumOnServer);
+  const mgSheoji = useSyncExternalStore(subscribeMgSheoji, mgSheojiOn, mgSheojiOnServer);
 
   useEffect(() => {
     if (!isDesktop) return;
@@ -184,6 +225,19 @@ export default function SettingsPanel({
               checked={recsEnabled}
               disabled={busy}
               onChange={() => patchSettings({ recommendations: !recsEnabled })}
+              className="h-3.5 w-3.5 accent-accent"
+            />
+          </label>
+
+          {/* 황금연휴 추천이 꺼져 있으면 MG쉬지 모드로 보여줄 내용(휴가 금고 +
+              그 추천)도 반쪽짜리가 된다 — 추천 on/off 바로 밑에 붙여서 두 기능이
+              한 묶음이라는 걸 자리로도 보여준다 */}
+          <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+            🌴 MG쉬지 모드
+            <input
+              type="checkbox"
+              checked={mgSheoji}
+              onChange={() => applyMgSheoji(!mgSheoji)}
               className="h-3.5 w-3.5 accent-accent"
             />
           </label>

@@ -36,13 +36,6 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 const SERVER_PORT: &str = if cfg!(debug_assertions) { "3000" } else { "3210" };
 const SERVER_HOST: &str = if cfg!(debug_assertions) { "localhost" } else { "127.0.0.1" };
 
-/// 트레이 미니 팝업 창 크기.
-const TRAY_POPUP_SIZE: (f64, f64) = (300.0, 380.0);
-
-/// 전역 퀵 입력창 크기와 단축키. 알프레드/스포트라이트처럼 화면 가운데 뜨는 한 줄짜리 입력창.
-const QUICK_ADD_SIZE: (f64, f64) = (600.0, 76.0);
-const QUICK_ADD_SHORTCUT: &str = "Ctrl+Shift+Space";
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -53,32 +46,23 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden".into()]),
         ))
-        // 앱이 트레이에 숨어 있어도(포커스가 없어도) 단축키를 받으려면 OS에 등록해야
-        // 한다 — 일반 keydown 리스너는 우리 창이 포커스를 가졌을 때만 동작한다.
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        toggle_quick_add(app);
-                    }
-                })
-                .build(),
-        )
         .invoke_handler(tauri::generate_handler![
             set_opacity,
             toggle_mini,
             set_autostart,
-            get_autostart,
-            show_main,
-            hide_quick_add,
-            refresh_main_and_hide_quick_add
+            get_autostart
         ])
         .setup(|app| {
-            // 윈도우 토스트 알림에 "황금연휴 캘린더"라고 뜨게 하는 등록. 이게 없으면
+            // 이름을 "황금연휴 캘린더"에서 "MG 매니지"로 바꾸면서 앱 데이터 폴더
+            // 이름도 같이 바뀐다 — 옛 폴더에 있던 DB·설정을 먼저 옮겨야 한다.
+            // 그래야 사용자 눈에는 그냥 이름만 바뀌고, 일정은 그대로 남아 있다.
+            migrate_app_data_dir_if_needed();
+
+            // 윈도우 토스트 알림에 "MG 매니지"라고 뜨게 하는 등록. 이게 없으면
             // 설치형(Win32, MSIX 아님) 앱은 AUMID 문자열(identifier)을 그대로 보여준다.
             register_toast_display_name(
                 &app.config().identifier,
-                app.config().product_name.as_deref().unwrap_or("황금연휴 캘린더"),
+                app.config().product_name.as_deref().unwrap_or("MG 매니지"),
             );
 
             let hidden_start = std::env::args().any(|a| a == "--hidden");
@@ -133,104 +117,27 @@ pub fn run() {
 
             let base_url = format!("http://{SERVER_HOST}:{SERVER_PORT}");
             let url = tauri::WebviewUrl::External(base_url.parse().unwrap());
-            let tray_url = tauri::WebviewUrl::External(format!("{base_url}/tray").parse().unwrap());
 
             let window = tauri::WebviewWindowBuilder::new(app, "main", url)
-                .title("황금연휴 캘린더")
+                .title("MG 매니지")
                 .inner_size(DEFAULT_SIZE.0, DEFAULT_SIZE.1)
                 .min_inner_size(960.0, 700.0)
                 .resizable(true)
                 .visible(!hidden_start)
-                // WebView2의 OS 파일-드롭 핸들러가 켜져 있으면(기본값) 화면 안에서
-                // 쓰는 HTML5 드래그 앤 드롭(달력 일정 이동/복사)이 윈도우에서는 아예
-                // 안 먹는다 — 같은 마우스 이벤트를 그쪽이 먼저 가로챈다. 이 창은
-                // 밖에서 파일을 끌어다 놓는 기능이 없으니 꺼도 잃는 게 없다.
-                .disable_drag_drop_handler()
                 .build()?;
-
-            // 트레이 미니 팝업 — 매번 새 창을 만들지 않고 하나를 숨겼다 보여줬다 한다.
-            // "오늘 남은 일정"만 훑어보는 가벼운 용도라 장식(제목표시줄)도, 작업표시줄
-            // 항목도 없앤다. `/tray` 페이지가 무엇을 보여줄지는 서버(Next) 쪽에서 정한다 —
-            // Rust는 창을 띄우고 위치만 잡을 뿐, "오늘 남았나/내일 첫 일정인가" 분기는
-            // 모르는 편이 낫다(그 로직은 DB를 직접 보는 서버 컴포넌트가 훨씬 간단하다).
-            let tray_popup = tauri::WebviewWindowBuilder::new(app, "tray", tray_url)
-                .title("오늘 일정")
-                .inner_size(TRAY_POPUP_SIZE.0, TRAY_POPUP_SIZE.1)
-                .resizable(false)
-                .decorations(false)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .shadow(true)
-                .visible(false)
-                .build()?;
-
-            // 팝업 밖을 클릭해 포커스를 잃으면 닫는다 — 흔한 플라이아웃 동작.
-            // (트레이 아이콘 hover로 여는 방식은 일부러 안 했다 — 마우스가 트레이에서
-            // 팝업 쪽으로 넘어가는 순간 Leave 이벤트가 먼저 떠서 안의 버튼을 누르기도
-            // 전에 닫혀 버린다. 클릭으로 열고 클릭/포커스아웃으로 닫는 쪽이 더 믿을 만하다.)
-            let tp = tray_popup.clone();
-            tray_popup.on_window_event(move |event| {
-                if let WindowEvent::Focused(false) = event {
-                    let _ = tp.hide();
-                }
-            });
-
-            // 전역 퀵 입력창(알프레드/스포트라이트 스타일) — 장식도 작업표시줄 항목도
-            // 없이 화면 가운데 떠서, 입력한 문장을 곧장 lib/quickParse.ts로 넘겨
-            // 일정을 만든다. transparent(true)라 창 배경이 페이지가 실제로 그린
-            // 만큼만 보인다 — 둥근 카드 하나만 데스크톱 위에 떠 있는 것처럼 보이는
-            // 이유가 이것이다.
-            let quick_add_url =
-                tauri::WebviewUrl::External(format!("{base_url}/quick-add").parse().unwrap());
-            let quick_add = tauri::WebviewWindowBuilder::new(app, "quickadd", quick_add_url)
-                .title("빠른 일정 추가")
-                .inner_size(QUICK_ADD_SIZE.0, QUICK_ADD_SIZE.1)
-                .resizable(false)
-                .decorations(false)
-                .transparent(true)
-                .always_on_top(true)
-                .skip_taskbar(true)
-                .shadow(false)
-                .center()
-                .visible(false)
-                .build()?;
-
-            let qa = quick_add.clone();
-            quick_add.on_window_event(move |event| {
-                if let WindowEvent::Focused(false) = event {
-                    let _ = qa.hide();
-                }
-            });
-
-            // Ctrl+Shift+Space는 앱이 트레이에 숨어 있어도 OS가 직접 받아 우리에게
-            // 알려준다. 등록이 실패해도(다른 앱이 이미 그 조합을 쓰는 중일 수 있다)
-            // 앱 자체는 그대로 켜져야 하므로 ?로 전체를 실패시키지 않는다.
-            //
-            // 배포본은 windows_subsystem="windows"라 콘솔이 아예 없어서 eprintln이
-            // 어디에도 안 남는다 — 실패해도 사용자도 우리도 알 도리가 없었다.
-            // 그래서 파일로 남기고, 트레이 메뉴에 같은 기능을 여는 대체 경로도 둔다
-            // (단축키가 다른 프로그램과 겹쳐도 최소한 이걸로는 열 수 있게).
-            use tauri_plugin_global_shortcut::GlobalShortcutExt;
-            if let Err(e) = app.global_shortcut().register(QUICK_ADD_SHORTCUT) {
-                let msg = format!("전역 단축키({QUICK_ADD_SHORTCUT}) 등록 실패: {e}");
-                eprintln!("{msg}");
-                let data_dir = app_data_dir();
-                let _ = fs::create_dir_all(&data_dir);
-                let _ = fs::write(data_dir.join("shortcut-error.log"), msg);
-            }
 
             // ── 시스템 트레이 ──────────────────────────────────────────
             // 닫기 버튼은 종료가 아니라 트레이로 숨긴다. 알림 폴링이 창 상태와
             // 무관하게 계속 돌아야 해서(숨겨져도 백그라운드 스레드는 그대로 산다),
             // 트레이 "종료"에서만 진짜로 끝낸다.
             let show_item = MenuItem::with_id(app, "show", "열기", true, None::<&str>)?;
-            // Ctrl+Shift+Space가 다른 프로그램과 겹쳐 안 먹힐 때를 대비한 대체 경로.
-            let quick_add_item =
-                MenuItem::with_id(app, "quick_add", "빠른 일정 추가", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
-            let tray_menu =
-                Menu::with_items(app, &[&show_item, &quick_add_item, &quit_item])?;
+            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
+            // 트레이 아이콘 클릭 = 메인 창 열기. 예전엔 클릭할 때마다 "오늘 남은
+            // 일정"만 보여주는 작은 팝업이 따로 떴는데, 창을 하나 재사용하는 구조라
+            // 갱신이 안 되는 등 신뢰도가 떨어져 걷어내고 메인 창을 바로 여는 단순한
+            // 동작으로 되돌렸다.
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&tray_menu)
@@ -243,35 +150,20 @@ pub fn run() {
                             let _ = w.set_focus();
                         }
                     }
-                    "quick_add" => toggle_quick_add(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
-                        position,
                         ..
                     } = event
                     {
                         let app = tray.app_handle();
-                        let Some(popup) = app.get_webview_window("tray") else { return };
-                        if popup.is_visible().unwrap_or(false) {
-                            let _ = popup.hide();
-                            return;
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
-                        // 트레이는 보통 화면 오른쪽 아래에 있다. 클릭 지점을 팝업의
-                        // 오른쪽 아래 모서리로 보고 왼쪽 위로 띄우면 화면 밖으로 안 나간다.
-                        let x = (position.x - TRAY_POPUP_SIZE.0).max(0.0);
-                        let y = (position.y - TRAY_POPUP_SIZE.1).max(0.0);
-                        let _ = popup.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
-                        // 창을 한 번 만들어 두고 계속 재사용하는 구조라, 새로고침하지
-                        // 않으면 맨 처음 띄웠을 때의 "오늘 남은 일정/내일 첫 일정" 판단이
-                        // 그대로 굳어 버린다 — 18시를 넘기거나 일정이 바뀌어도 반영이 안 된다.
-                        // 열 때마다 다시 그려서 그 순간 기준으로 새로 판단하게 한다.
-                        let _ = popup.eval("window.location.reload()");
-                        let _ = popup.show();
-                        let _ = popup.set_focus();
                     }
                 })
                 .build(app)?;
@@ -417,68 +309,34 @@ fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
-/// 트레이 미니 팝업의 "전체 달력 열기" 버튼이 부른다. 팝업 자체는 자기가 포커스를
-/// 잃으면(메인 창에 포커스가 넘어가는 순간 포함) 알아서 숨으므로 여기서 따로 안 닫아도 된다.
-#[tauri::command]
-fn show_main(app: tauri::AppHandle) {
-    // 트레이 팝업이 always_on_top이라, 여기서 직접 숨기지 않으면 메인 창을
-    // show()+focus()해도 팝업이 그 위를 계속 덮고 있어 "눌러도 안 보인다"가 된다.
-    // 팝업 자신의 포커스아웃 hide()에만 기대면 타이밍에 따라 이 순간을 놓칠 수 있다.
-    if let Some(popup) = app.get_webview_window("tray") {
-        let _ = popup.hide();
-    }
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
-}
-
-/// 단축키를 누를 때마다 부른다 — 떠 있으면 숨기고, 숨어 있으면 화면 가운데
-/// 다시 띄운다(멀티 모니터에서 활성 모니터가 바뀌었을 수 있어 매번 center()한다).
-fn toggle_quick_add(app: &tauri::AppHandle) {
-    let Some(w) = app.get_webview_window("quickadd") else { return };
-    // 껐다 켰다(toggle)로 했다가 뺐다 — 단축키를 살짝만 오래 눌러도 Windows가
-    // 키 반복(auto-repeat)으로 Pressed를 여러 번 보내는데, 그때마다 보였다 숨었다를
-    // 반복해서 사용자 입장에서는 "입력창이 사라졌다 나타났다" 하며 방금 친 글자가
-    // 어디로 갔는지 알 수 없게 됐다. 이제는 항상 보이고 포커스를 준다 — 닫는 건
-    // Esc나 저장 완료, 포커스아웃뿐이라 더 예측 가능하다.
-    let _ = w.center();
-    let _ = w.show();
-    let _ = w.set_focus();
-}
-
-/// 퀵 입력창이 Esc를 누르거나 일정을 저장한 직후 스스로를 닫을 때 부른다.
-#[tauri::command]
-fn hide_quick_add(app: tauri::AppHandle) {
-    if let Some(w) = app.get_webview_window("quickadd") {
-        let _ = w.hide();
-    }
-}
-
-/// 퀵 입력창에서 저장에 **성공했을 때만** 부른다. 메인 창은 별도 웹뷰라
-/// 퀵 입력창이 만든 일정을 알 도리가 없다 — router.refresh()는 그 페이지를
-/// 그린 React 트리 안에서만 뜻이 있어서 바깥(다른 웹뷰)에서는 못 부른다.
-/// 그래서 메인 창에 직접 새로고침 스크립트를 흘려 넣는다. 취소(Esc)나
-/// 단순 포커스아웃으로 닫힐 때는 안 부른다 — 아무것도 안 바뀌었는데
-/// 화면을 새로고침하면 사용자가 보던 자리(스크롤 등)만 잃는다.
-#[tauri::command]
-fn refresh_main_and_hide_quick_add(app: tauri::AppHandle) {
-    if let Some(w) = app.get_webview_window("quickadd") {
-        let _ = w.hide();
-    }
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.eval("window.location.reload()");
-    }
-}
-
 /// 배포본 사이드카 데이터 폴더이자, 아침 요약 발송 여부 같은 자잘한 상태 파일을
 /// 두는 자리이기도 하다 — 그래서 개발 모드에서도 그대로 쓸 수 있게 cfg를 걷어냈다.
+///
+/// 여기 SQLite DB(`data/app.db`)도 같이 들어 있다(`lib/db.ts`의 `APP_DATA_DIR`).
+/// 폴더 이름을 바꾸면 기존 DB가 안 보이는 게 아니라 **다른 자리에 그대로 남고,
+/// 앱은 새 빈 DB로 시작한다** — 그래서 이름을 옮길 때는 반드시
+/// `migrate_app_data_dir_if_needed`로 폴더째 옮겨야 한다.
 fn app_data_dir() -> std::path::PathBuf {
+    appdata_root().join("MG 매니지").join("data")
+}
+
+fn appdata_root() -> std::path::PathBuf {
     std::env::var_os("APPDATA")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir)
-        .join("황금연휴 캘린더")
-        .join("data")
+}
+
+/// "황금연휴 캘린더"였던 옛 폴더를 "MG 매니지"로 한 번만 옮긴다. 옮기지 않으면
+/// 이름만 바뀐 게 아니라 **사용자가 쓰던 일정·설정이 전부 사라진 것처럼 보인다**
+/// (옛 폴더에 그대로 남아 있을 뿐인데 새 폴더는 비어서 시작하기 때문).
+/// 새 폴더가 이미 있으면(두 번째 실행부터) 아무것도 안 한다.
+fn migrate_app_data_dir_if_needed() {
+    let root = appdata_root();
+    let old = root.join("황금연휴 캘린더");
+    let new = root.join("MG 매니지");
+    if old.exists() && !new.exists() {
+        let _ = std::fs::rename(&old, &new);
+    }
 }
 
 #[derive(Deserialize)]

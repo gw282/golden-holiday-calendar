@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "황금연휴 캘린더",
-  "version": "0.26.0",
-  "identifier": "com.goldenholidaycalendar.desktop",
+  "productName": "MG 매니지",
+  "version": "0.27.0",
+  "identifier": "com.mgmanage.desktop",
   "build": {
     "beforeDevCommand": "npm run tauri:prepare && npm run dev",
     "devUrl": "http://localhost:3000",

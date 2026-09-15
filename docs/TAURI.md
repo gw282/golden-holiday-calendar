@@ -16,7 +16,7 @@ Electron은 Chromium을 통째로 들고 다니고, Tauri는 OS에 이미 있는
 1. `npm run package`로 만든 Next standalone 서버(`dist/`)와, 지금 이 PC의 `node.exe`를
    리소스로 번들한다(`scripts/tauri-package.mjs`).
 2. 앱을 실행하면 Rust가 그 `node.exe`로 `server.js`를 자식 프로세스로 띄운다
-   (`127.0.0.1:3210`, `APP_DATA_DIR`를 `%APPDATA%\Golden Holiday Calendar\data`로 지정).
+   (`127.0.0.1:3210`, `APP_DATA_DIR`를 `%APPDATA%\MG 매니지\data`로 지정).
 3. 포트가 열릴 때까지 기다렸다가, WebView2 창을 그 주소로 연다.
 
 쿼리 63개짜리 SQL도, 17개 API 라우트도 손대지 않는다 — Electron 때와 똑같이 "서버는
@@ -51,7 +51,7 @@ npm run tauri:dev     # 개발 — Next dev 서버(3000)를 그대로 띄워 감
 npm run tauri:build   # npm run package(Next build) → 리소스 정리 → cargo build → nsis
 ```
 
-결과물: `src-tauri/target/release/bundle/nsis/Golden Holiday Calendar_<버전>_x64-setup.exe`
+결과물: `src-tauri/target/release/bundle/nsis/MG 매니지_<버전>_x64-setup.exe`
 
 `src-tauri/runtime/`(번들 리소스로 복사된 dist+node.exe)와 `src-tauri/target/`(Rust
 빌드 산출물)은 매 빌드마다 다시 만들어지므로 git에 올리지 않는다.

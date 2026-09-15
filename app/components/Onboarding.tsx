@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-const STORAGE_KEY = "golden-holiday-calendar-onboarding-seen";
+const STORAGE_KEY = "mg-manage-onboarding-seen";
 
 export default function Onboarding() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -28,7 +28,7 @@ export default function Onboarding() {
       <div className="border-b border-border px-5 py-4">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">처음 시작</p>
         <h2 className="mt-1 text-lg font-bold">이번 달 일정을 한 번 채워 볼까요?</h2>
-        <p className="mt-1 text-xs text-muted">황금연휴 캘린더는 날짜를 고르고, 일정과 연차를 쌓아 가는 화면입니다.</p>
+        <p className="mt-1 text-xs text-muted">MG 매니지는 날짜를 고르고, 일정과 연차를 쌓아 가는 화면입니다.</p>
       </div>
       <ol className="flex flex-col gap-4 px-5 py-5 text-sm">
         <Step number="1" title="날짜를 고릅니다">달력에서 일정을 등록할 날을 클릭하세요.</Step>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "황금연휴 캘린더",
+  title: "MG 매니지",
   description: "연차 하루를 놓아 연휴를 건넙니다 — 달력 · 일정 · 연휴 추천을 한 화면에",
 };
 
@@ -23,7 +23,7 @@ const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(["50","75","125",
 /** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. SettingsPanel과 같은 "weekNum" 키다 */
 const WEEK_NUM_SCRIPT = `try{if(localStorage.getItem("weekNum")==="off")document.documentElement.dataset.weekNum="off"}catch(e){}`;
 
-/** MG쉬지 모드도 같은 이유로 첫 페인트 전에 붙인다. MgSheojiToggle과 같은 "mgSheoji" 키다 */
+/** MG쉬지 모드도 같은 이유로 첫 페인트 전에 붙인다. SettingsPanel.tsx와 같은 "mgSheoji" 키다 */
 const MG_SHEOJI_SCRIPT = `try{if(localStorage.getItem("mgSheoji")==="on")document.documentElement.dataset.mgSheoji="on"}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

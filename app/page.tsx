@@ -54,7 +54,6 @@ import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import SettingsPanel from "./components/SettingsPanel";
-import MgSheojiToggle from "./components/MgSheojiToggle";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -435,7 +434,6 @@ export default async function Home(props: PageProps<"/">) {
             </h1>
           </Hint>
 
-          <MgSheojiToggle />
           <HelpButton desktop={isDesktopApp()} />
           <ZoomToggle />
           <ThemeToggle />
@@ -457,9 +455,10 @@ export default async function Home(props: PageProps<"/">) {
         </div>
       </header>
 
-      {/* MG쉬지 모드(MgSheojiToggle)가 켜지면 이 블록 전체가 숨고 restModePanel이
-          대신 보인다 — 진짜 상태는 <html data-mg-sheoji>뿐이고(globals.css가 가른다),
-          두 블록 다 서버가 이미 그려서 내보낸다. 켤 때마다 다시 계산할 이유가 없다. */}
+      {/* MG쉬지 모드(설정 팝업의 "🌴 MG쉬지 모드" 체크박스)가 켜지면 이 블록 전체가
+          숨고 restModePanel이 대신 보인다 — 진짜 상태는 <html data-mg-sheoji>뿐이고
+          (globals.css가 가른다), 두 블록 다 서버가 이미 그려서 내보낸다. 켤 때마다
+          다시 계산할 이유가 없다. */}
       <div className="normal-mode">
       {/* 달력보다 위, 한 줄. 둘 다 **날짜와 무관하게 전체 일정**을 다루는 도구라 나란히 둔다 —
           다가오는 일정은 앞을 내다보고, 검색은 뒤를 되짚는다.
