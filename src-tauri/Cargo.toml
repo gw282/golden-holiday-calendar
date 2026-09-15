@@ -1,8 +1,8 @@
 [package]
 name = "golden-holiday-calendar"
-version = "0.22.0"
-description = "황금연휴 캘린더 데스크톱 셸"
-authors = ["황금연휴 캘린더"]
+version = "0.23.0"
+description = "MG 매니지 데스크톱 셸"
+authors = ["MG 매니지"]
 edition = "2021"
 
 [lib]
