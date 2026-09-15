@@ -1,6 +1,6 @@
 [package]
 name = "golden-holiday-calendar"
-version = "0.21.0"
+version = "0.22.0"
 description = "황금연휴 캘린더 데스크톱 셸"
 authors = ["황금연휴 캘린더"]
 edition = "2021"

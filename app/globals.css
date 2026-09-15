@@ -106,3 +106,45 @@ body {
 html[data-week-num="off"] .week-num {
   display: none;
 }
+
+/*
+ * MG쉬지 모드 — 업무 화면(.normal-mode)과 힐링 화면(.rest-mode)을 바꿔 끼운다.
+ * 둘 다 서버가 이미 그려서 내려보낸 채로 있고, 여기서 보일지만 정한다
+ * (MgSheojiToggle.tsx가 <html data-mg-sheoji>를 붙였다 뗀다).
+ * display:none은 opacity 트랜지션을 못 타므로, 새로 나타나는 쪽에 짧은
+ * fade-in 애니메이션을 걸어 "부드러운 전환" 요구를 채운다.
+ */
+.rest-mode {
+  display: none;
+}
+html[data-mg-sheoji="on"] .normal-mode {
+  display: none;
+}
+html[data-mg-sheoji="on"] .rest-mode {
+  display: block;
+  animation: mg-sheoji-fade-in 420ms ease-out;
+}
+@keyframes mg-sheoji-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-mg-sheoji="on"] .rest-mode {
+    animation: none;
+  }
+}
+
+/* 켜지면 화면 분위기가 살짝 따뜻해진다 — 업무용 파랑 accent 대신 휴식을 뜻하는
+   호박색을 쓰고, 배경도 한 단계 데운다. 나머지 토큰(--leave 등)은 그대로 둔다 —
+   전부 바꾸면 "새 테마"가 되어 버려 오히려 이게 같은 앱이라는 감각이 사라진다. */
+html[data-mg-sheoji="on"] {
+  --background: light-dark(#fbf3e7, #1c1712);
+  --accent: light-dark(#c2760f, #f0b45a);
+  --accent-soft: light-dark(#f6e6c8, #3a2c14);
+}
