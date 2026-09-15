@@ -203,11 +203,20 @@ pub fn run() {
             });
 
             // Ctrl+Shift+Space는 앱이 트레이에 숨어 있어도 OS가 직접 받아 우리에게
-            // 알려준다. 등록이 실패해도(다른 앱이 이미 쓰는 중일 수 있다) 앱 자체는
-            // 그대로 켜져야 하므로 ?로 전체를 실패시키지 않는다.
+            // 알려준다. 등록이 실패해도(다른 앱이 이미 그 조합을 쓰는 중일 수 있다)
+            // 앱 자체는 그대로 켜져야 하므로 ?로 전체를 실패시키지 않는다.
+            //
+            // 배포본은 windows_subsystem="windows"라 콘솔이 아예 없어서 eprintln이
+            // 어디에도 안 남는다 — 실패해도 사용자도 우리도 알 도리가 없었다.
+            // 그래서 파일로 남기고, 트레이 메뉴에 같은 기능을 여는 대체 경로도 둔다
+            // (단축키가 다른 프로그램과 겹쳐도 최소한 이걸로는 열 수 있게).
             use tauri_plugin_global_shortcut::GlobalShortcutExt;
             if let Err(e) = app.global_shortcut().register(QUICK_ADD_SHORTCUT) {
-                eprintln!("전역 단축키 등록 실패: {e}");
+                let msg = format!("전역 단축키({QUICK_ADD_SHORTCUT}) 등록 실패: {e}");
+                eprintln!("{msg}");
+                let data_dir = app_data_dir();
+                let _ = fs::create_dir_all(&data_dir);
+                let _ = fs::write(data_dir.join("shortcut-error.log"), msg);
             }
 
             // ── 시스템 트레이 ──────────────────────────────────────────
@@ -215,8 +224,12 @@ pub fn run() {
             // 무관하게 계속 돌아야 해서(숨겨져도 백그라운드 스레드는 그대로 산다),
             // 트레이 "종료"에서만 진짜로 끝낸다.
             let show_item = MenuItem::with_id(app, "show", "열기", true, None::<&str>)?;
+            // Ctrl+Shift+Space가 다른 프로그램과 겹쳐 안 먹힐 때를 대비한 대체 경로.
+            let quick_add_item =
+                MenuItem::with_id(app, "quick_add", "빠른 일정 추가", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
-            let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+            let tray_menu =
+                Menu::with_items(app, &[&show_item, &quick_add_item, &quit_item])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
@@ -230,6 +243,7 @@ pub fn run() {
                             let _ = w.set_focus();
                         }
                     }
+                    "quick_add" => toggle_quick_add(app),
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
@@ -251,6 +265,11 @@ pub fn run() {
                         let x = (position.x - TRAY_POPUP_SIZE.0).max(0.0);
                         let y = (position.y - TRAY_POPUP_SIZE.1).max(0.0);
                         let _ = popup.set_position(tauri::PhysicalPosition::new(x as i32, y as i32));
+                        // 창을 한 번 만들어 두고 계속 재사용하는 구조라, 새로고침하지
+                        // 않으면 맨 처음 띄웠을 때의 "오늘 남은 일정/내일 첫 일정" 판단이
+                        // 그대로 굳어 버린다 — 18시를 넘기거나 일정이 바뀌어도 반영이 안 된다.
+                        // 열 때마다 다시 그려서 그 순간 기준으로 새로 판단하게 한다.
+                        let _ = popup.eval("window.location.reload()");
                         let _ = popup.show();
                         let _ = popup.set_focus();
                     }

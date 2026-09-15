@@ -1,6 +1,6 @@
 [package]
 name = "golden-holiday-calendar"
-version = "0.25.0"
+version = "0.26.0"
 description = "MG 매니지 데스크톱 셸"
 authors = ["MG 매니지"]
 edition = "2021"
