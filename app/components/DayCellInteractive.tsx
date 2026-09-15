@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { formatKo } from "@/lib/date";
 import {
   hasEmoji,
   hasNote,
@@ -102,7 +103,9 @@ export default function DayCellInteractive({
           >
             <form onSubmit={save}>
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
-                <h2 className="text-xs font-semibold">{date} 메모 · 이모지</h2>
+                <h2 className="text-xs font-semibold">
+                  {date.slice(0, 4)}년 {formatKo(date)} 메모 · 이모지
+                </h2>
                 <button
                   type="button"
                   onClick={() => dialog.current?.close()}
