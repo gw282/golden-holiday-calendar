@@ -49,8 +49,7 @@ import Shortcuts from "./components/Shortcuts";
 import HelpButton from "./components/HelpButton";
 import FeatureGuideButton from "./components/FeatureGuideButton";
 import Hint from "./components/Hint";
-import ThemeToggle from "./components/ThemeToggle";
-import ZoomToggle from "./components/ZoomToggle";
+import DisplaySettingsButton from "./components/DisplaySettingsButton";
 import OmniSearch from "./components/OmniSearch";
 import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
@@ -385,9 +384,8 @@ export default async function Home(props: PageProps<"/">) {
 
           <HelpButton desktop={isDesktopApp()} />
           <FeatureGuideButton desktop={isDesktopApp()} />
-          <ZoomToggle />
-          <ThemeToggle />
-          {/* 황금연휴 · 주차 표시 · 온라인/오프라인 · 알림 시점을 한데 모은 팝업.
+          <DisplaySettingsButton />
+          {/* 온라인/오프라인 · 알림 시점을 한데 모은 팝업.
               헤더에 알약 단추를 하나씩 늘어놓지 않는다 */}
           <SettingsPanel
             offline={offline}

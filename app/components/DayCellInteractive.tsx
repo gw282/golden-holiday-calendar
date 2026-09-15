@@ -15,6 +15,18 @@ import {
 } from "./localNotes";
 
 /**
+ * 이모지 최대 3개로 자른다. `string.length`로 자르면 이모지 하나가 UTF-16
+ * 코드 유닛을 여러 개 쓰는 경우(피부톤·국기·ZWJ 합성 이모지 등) 중간이
+ * 잘려 깨진 글자가 남는다 — `Intl.Segmenter`로 "사람이 보는 글자 하나"
+ * 단위(grapheme)로 세야 정확하다.
+ */
+function limitEmoji(text: string): string {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
+  return graphemes.slice(0, 3).join("");
+}
+
+/**
  * 달력 셀의 얇은 클라이언트 리프.
  *
  * CalendarGrid.tsx는 계속 서버 컴포넌트로 남는다 — 월/주 레이아웃과 띠(band) 계산은
@@ -59,7 +71,10 @@ export default function DayCellInteractive({
   function save(e: React.FormEvent) {
     e.preventDefault();
     writeNote(date, draft);
-    writeEmoji(date, emojiDraft);
+    // 입력 중(onChange)에 자르지 않는다 — 윈도우 이모지 선택 창은 문자를 여러 단계로
+    // 조합해서 넣는데, 그 중간에 값을 강제로 바꾸면 조합이 깨져 서로게이트 페어가
+    // 반쪽만 남는 등 훨씬 지저분한 값이 쌓인다. 저장하는 이 순간에만 자른다.
+    writeEmoji(date, limitEmoji(emojiDraft));
     dialog.current?.close();
   }
 
@@ -121,10 +136,9 @@ export default function DayCellInteractive({
                     value={emojiDraft}
                     onChange={(e) => setEmojiDraft(e.target.value)}
                     placeholder="🎂"
-                    maxLength={8}
-                    aria-label="날짜 칸에 표시할 이모지"
-                    title="Win + . (마침표) 를 누르면 이모지 선택 창이 뜹니다"
-                    className="w-12 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
+                    aria-label="날짜 칸에 표시할 이모지 (최대 3개)"
+                    title="최대 3개 · Win + . (마침표) 를 누르면 이모지 선택 창이 뜹니다"
+                    className="w-16 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
                   />
                   <input
                     autoFocus
