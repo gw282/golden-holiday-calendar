@@ -817,11 +817,10 @@ export default async function Home(props: PageProps<"/">) {
         {/* 오프라인이거나 설정이 비어 있으면 아예 안 보인다.
             오프라인에서는 구글에 닿지 않고, 설정이 없으면 연결 자체가 안 된다 */}
         {showGoogle && <GoogleCalendarButton flash={gcalFlash} />}
-        {/* 직원 개인이 혼자 쓰려고 만든 비공식 도구라는 점을 로고 옆에 못박아 둔다.
-            회사가 만든 것으로 오해되면 안 되기 때문이다 */}
+        {/* 직원 개인이 혼자 쓰려고 만든 비공식 도구라는 점을 못박아 둔다.
+            회사가 만든 것으로 오해되면 안 되기 때문이다. 로고는 뺐다 — 실제 회사
+            상표를 출처 확인 없이 쓸 수 없어서다 */}
         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted opacity-70">
-          {/* 로고 이미지는 실제 중앙회 로고 파일을 받으면 이 자리에 교체할 것 */}
-          <img src="/mg-logo.png" alt="로고" className="h-4 w-auto" />
           개인이 만든 사내용 도구
         </span>
       </footer>
