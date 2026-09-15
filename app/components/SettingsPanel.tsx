@@ -218,29 +218,39 @@ export default function SettingsPanel({
 
       {open && (
         <div className="absolute left-0 top-full z-30 mt-1 flex w-60 flex-col gap-3 rounded-lg border border-border bg-raised p-3 shadow-lg">
-          <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-            황금연휴 추천
-            <input
-              type="checkbox"
-              checked={recsEnabled}
-              disabled={busy}
-              onChange={() => patchSettings({ recommendations: !recsEnabled })}
-              className="h-3.5 w-3.5 accent-accent"
-            />
-          </label>
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+              황금연휴 추천
+              <input
+                type="checkbox"
+                checked={recsEnabled}
+                disabled={busy}
+                onChange={() => patchSettings({ recommendations: !recsEnabled })}
+                className="h-3.5 w-3.5 accent-accent"
+              />
+            </label>
+            <p className="text-[10px] leading-snug text-muted">
+              끄면 아래 MG쉬지 모드의 추천 카드도 같이 빕니다.
+            </p>
+          </div>
 
           {/* 황금연휴 추천이 꺼져 있으면 MG쉬지 모드로 보여줄 내용(휴가 금고 +
               그 추천)도 반쪽짜리가 된다 — 추천 on/off 바로 밑에 붙여서 두 기능이
               한 묶음이라는 걸 자리로도 보여준다 */}
-          <label className="flex items-center justify-between gap-2 text-xs text-foreground">
-            🌴 MG쉬지 모드
-            <input
-              type="checkbox"
-              checked={mgSheoji}
-              onChange={() => applyMgSheoji(!mgSheoji)}
-              className="h-3.5 w-3.5 accent-accent"
-            />
-          </label>
+          <div className="flex flex-col gap-1">
+            <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+              🌴 MG쉬지 모드
+              <input
+                type="checkbox"
+                checked={mgSheoji}
+                onChange={() => applyMgSheoji(!mgSheoji)}
+                className="h-3.5 w-3.5 accent-accent"
+              />
+            </label>
+            <p className="text-[10px] leading-snug text-muted">
+              업무 화면 대신 휴가 금고·황금연휴 추천 화면을 보여줍니다.
+            </p>
+          </div>
 
           <label className="flex items-center justify-between gap-2 text-xs text-foreground">
             달력 주차 표시

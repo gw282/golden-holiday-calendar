@@ -33,10 +33,10 @@ export default function Onboarding() {
       <ol className="flex flex-col gap-4 px-5 py-5 text-sm">
         <Step number="1" title="날짜를 고릅니다">달력에서 일정을 등록할 날을 클릭하세요.</Step>
         <Step number="2" title="+ 추가를 누릅니다">제목, 날짜, 시간과 메모를 입력하고 저장하세요. 여러 날 일정도 가능합니다.</Step>
-        <Step number="3" title="연차와 연휴를 연결합니다">연차 일정으로 표시하면 주말·공휴일을 계산해 쉴 수 있는 조합을 추천합니다.</Step>
+        <Step number="3" title="황금연휴 추천을 확인합니다">날짜를 고르면 오른쪽에 그 날이 낀 연휴 조합이 뜹니다. 마음에 들면 그 자리에서 바로 연차로 등록하세요.</Step>
       </ol>
       <div className="flex items-center justify-between border-t border-border px-5 py-3">
-        <span className="text-[11px] text-muted">도움말 ? 버튼에서 다시 볼 수 있습니다.</span>
+        <span className="text-[11px] text-muted">이 안내는 처음 한 번만 뜹니다. 궁금한 점은 ? 도움말에서.</span>
         <button type="button" onClick={close} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
           일정 등록 시작
         </button>
