@@ -10,8 +10,15 @@ import fs from "node:fs";
 import { buildHolidays } from "./holidays";
 import { addDays, today } from "./date";
 
-/** 공휴일을 올해부터 몇 년치 생성해 둘지 */
-const HOLIDAY_YEARS = 5;
+/**
+ * 공휴일을 올해부터 몇 년치 생성해 둘지.
+ *
+ * 규칙 기반 생성(`buildHolidays`)이라 연도 자체에는 상한이 없다 — 음력 변환에 쓰는
+ * ICU 단기(dangi) 캘린더가 아주 넓은 범위를 지원한다. 다만 선거일·임시공휴일
+ * (`MANUAL_HOLIDAYS`)은 규칙으로 못 만들어서, 멀리 있는 해일수록 그 두 종류만
+ * 빠질 수 있다는 점은 그대로다.
+ */
+const HOLIDAY_YEARS = 10;
 
 /**
  * 공휴일 시드 판. `lib/holidays.ts`의 **규칙을 고치면 이 수를 올린다.**
