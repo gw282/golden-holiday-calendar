@@ -57,6 +57,7 @@ import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import SettingsPanel from "./components/SettingsPanel";
 import HolidayFinderButton from "./components/HolidayFinderButton";
 import DDayButton from "./components/DDayButton";
+import DetailsOutsideClose from "./components/DetailsOutsideClose";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -497,10 +498,12 @@ export default async function Home(props: PageProps<"/">) {
               >
                 &lsaquo;
               </Link>
-              {/* 연도를 누르면 그 해 공휴일이 펼쳐진다. <details>라 클라이언트 JS가 없다.
-                  한동안 그냥 글자였더니 누를 수 있다는 걸 아무도 몰랐다 — 테두리로 단추처럼
-                  보이게 하고, 공휴일 일수와 화살표를 붙여 **누를 이유**까지 적어 둔다. */}
-              <details className="group relative">
+              {/* 연도를 누르면 그 해 공휴일이 펼쳐진다. <details>라 대부분 클라이언트 JS가
+                  없고, 바깥 클릭·Esc로 닫는 것만 DetailsOutsideClose가 얇게 맡는다(안의
+                  내용은 그대로 서버가 그린다). 한동안 그냥 글자였더니 누를 수 있다는 걸
+                  아무도 몰랐다 — 테두리로 단추처럼 보이게 하고, 공휴일 일수와 화살표를
+                  붙여 **누를 이유**까지 적어 둔다. */}
+              <DetailsOutsideClose className="group relative">
                 <summary
                   title={`${viewYear}년 공휴일 월별로 보기`}
                   className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-border px-2 py-1 hover:border-accent hover:bg-accent-soft hover:text-accent group-open:border-accent group-open:bg-accent-soft group-open:text-accent [&::-webkit-details-marker]:hidden"
@@ -529,7 +532,7 @@ export default async function Home(props: PageProps<"/">) {
                     </span>
                     {/* 칸이 링크라는 것도 안 보이면 같은 실수를 반복한다 */}
                     <span className="font-normal text-[10px] text-muted">
-                      달을 누르면 그 달로 이동합니다 · Esc로 닫기
+                      달을 누르면 그 달로 이동합니다 · 바깥 클릭 또는 Esc로 닫기
                     </span>
                   </p>
 
@@ -597,7 +600,7 @@ export default async function Home(props: PageProps<"/">) {
                     </ul>
                   )}
                 </div>
-              </details>
+              </DetailsOutsideClose>
               <h2 className="text-base font-semibold">{Number(month.slice(5, 7))}월</h2>
               <Link
                 href={nextHref}
