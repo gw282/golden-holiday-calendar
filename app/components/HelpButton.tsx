@@ -92,10 +92,6 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
               <span className="text-foreground">횟수</span> 또는{" "}
               <span className="text-foreground">종료일까지</span> 중 골라 저장하세요.
             </Row>
-            <Row term="기능 안내">
-              헤더의 <span className="text-foreground">✨ 기능 안내</span>에서 주요 기능과 사용법을
-              확인할 수 있습니다.
-            </Row>
             <Row term="화면">
               <span className="text-foreground">비율 조정</span>으로 화면 크기를 바꾸고,{" "}
               <span className="text-foreground">다크모드·화이트모드</span>로 화면 테마를 선택할 수

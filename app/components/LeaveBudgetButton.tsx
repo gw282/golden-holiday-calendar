@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { LeaveSummary } from "@/lib/leave";
 
 /**
- * 휴가 잔고 — 머리말에 **잔고를 넣어 둔 휴가를 전부** 띄우고, 누르면 설정까지 보인다.
+ * 휴가 설정 — 머리말에 **잔고를 넣어 둔 휴가를 전부** 띄우고, 누르면 설정까지 보인다.
  *
  * 회사마다 주기가 다른 휴가가 여러 개 돈다. 연차는 입사일 기준으로 굴러가고 특별휴가는
  * 연말에 소멸한다. 한때 급한 것 하나만 D-를 띄웠는데, 그러면 **나머지가 있다는 사실 자체가
@@ -57,8 +57,8 @@ export default function LeaveBudgetButton({ leaves }: { leaves: LeaveSummary[] }
           setError(null);
           dialog.current?.showModal();
         }}
-        title="휴가 잔고 — 누르면 전부 보입니다"
-        className="group shrink-0 rounded-lg border border-border px-2.5 py-1.5 transition-colors hover:border-accent hover:bg-accent-soft"
+        title="휴가 설정 — 누르면 전부 보입니다"
+        className="group flex h-9 shrink-0 items-center rounded-lg border border-border px-2.5 transition-colors hover:border-accent hover:bg-accent-soft"
       >
         {/* 잔고를 넣어 둔 휴가는 **전부** 보여 준다. 하나만 띄우면 나머지가 있다는 사실 자체가
             묻히는데, 특별휴가처럼 조용히 소멸하는 쪽이 오히려 놓치기 쉽다.
@@ -90,7 +90,7 @@ export default function LeaveBudgetButton({ leaves }: { leaves: LeaveSummary[] }
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 id="leave-dialog-title" className="text-sm font-semibold">
-            휴가 잔고
+            휴가 설정
           </h2>
           <button
             type="button"
