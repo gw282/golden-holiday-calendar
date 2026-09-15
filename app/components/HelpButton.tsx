@@ -95,6 +95,12 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
               완전히 끄려면 트레이 아이콘을 눌러 종료를 고르세요.
             </Row>
           )}
+          {desktop && (
+            <Row term="퀵 입력창">
+              어디서든 <Kbd>Ctrl</Kbd>+<Kbd>Shift</Kbd>+<Kbd>Space</Kbd> — 화면 가운데 작은
+              입력창이 뜹니다. 문장을 치고 Enter로 바로 일정이 만들어집니다.
+            </Row>
+          )}
           <Row term="설정">
             황금연휴 추천 · 주차 표시{desktop && " · 알림 시점"}은 헤더의{" "}
             <span className="text-foreground">설정</span>에서 켜고 끕니다.
