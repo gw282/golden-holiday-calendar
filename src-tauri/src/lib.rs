@@ -124,6 +124,11 @@ pub fn run() {
                 .min_inner_size(960.0, 700.0)
                 .resizable(true)
                 .visible(!hidden_start)
+                // WebView2의 OS 파일-드롭 핸들러가 켜져 있으면(기본값) 화면 안에서
+                // 쓰는 HTML5 드래그 앤 드롭(달력 일정 이동/복사)이 윈도우에서는 아예
+                // 안 먹는다 — 같은 마우스 이벤트를 그쪽이 먼저 가로챈다. 이 창은
+                // 밖에서 파일을 끌어다 놓는 기능이 없으니 꺼도 잃는 게 없다.
+                .disable_drag_drop_handler()
                 .build()?;
 
             // 트레이 미니 팝업 — 매번 새 창을 만들지 않고 하나를 숨겼다 보여줬다 한다.
@@ -345,6 +350,12 @@ fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
 /// 잃으면(메인 창에 포커스가 넘어가는 순간 포함) 알아서 숨으므로 여기서 따로 안 닫아도 된다.
 #[tauri::command]
 fn show_main(app: tauri::AppHandle) {
+    // 트레이 팝업이 always_on_top이라, 여기서 직접 숨기지 않으면 메인 창을
+    // show()+focus()해도 팝업이 그 위를 계속 덮고 있어 "눌러도 안 보인다"가 된다.
+    // 팝업 자신의 포커스아웃 hide()에만 기대면 타이밍에 따라 이 순간을 놓칠 수 있다.
+    if let Some(popup) = app.get_webview_window("tray") {
+        let _ = popup.hide();
+    }
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.set_focus();
@@ -379,10 +390,29 @@ struct EventsResponse {
 }
 
 const POLL_INTERVAL: Duration = Duration::from_secs(30);
-const BREAK_INTERVAL: Duration = Duration::from_secs(50 * 60);
 /// `/api/settings`가 비어 있거나 못 받아 왔을 때만 쓰는 값. 화면에서 고르면
 /// DB에 저장돼 이 기본값 대신 그 값을 매 폴링마다 읽어 온다.
 const DEFAULT_REMIND_THRESHOLDS_MIN: [i64; 2] = [60, 15];
+
+/// "1시간마다 알림"이 뜰 때 이 중 하나를 무작위로 고른다 — 매번 같은 말이면
+/// 보름만 지나도 눈에 안 들어온다.
+const HOURLY_PHRASES: [(&str, &str); 5] = [
+    ("1시간째 달리는 중이시네요 🔥", "잠깐 스트레칭하고 다시 힘내봐요! 💪"),
+    ("벌써 1시간이 지났어요 ⏰", "목도 한번 풀어주고, 물 한 잔 어때요? 🥤"),
+    ("1시간 동안 진짜 고생하셨어요 👏", "잠깐 일어나서 몸 좀 풀어봐요! 🤸"),
+    ("오늘도 열일 중이시네요 ✨", "잠깐 눈도 쉬고 스트레칭 한 번! 👀"),
+    ("1시간 클리어! 🎯", "잠깐 기지개 켜고 다시 시작해봐요 🙆"),
+];
+
+/// 새 크레이트(rand) 없이 그때그때 시스템 시각의 나노초 자리로 고른다 —
+/// 알림 문구를 무작위로 섞는 정도라 암호학적 품질까지는 필요 없다.
+fn random_hourly_phrase() -> (&'static str, &'static str) {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    HOURLY_PHRASES[(nanos as usize) % HOURLY_PHRASES.len()]
+}
 
 #[derive(Deserialize, Default)]
 struct SettingsResponse {
@@ -420,13 +450,10 @@ fn run_notifier(app: &tauri::AppHandle) {
 
     let mut notified: HashSet<(i64, i64)> = HashSet::new();
     let mut notified_date = String::new();
-    // 마우스·키보드 움직임까지 보려면 프런트에서 매번 활동 신호를 보내야 해서 복잡해진다.
-    // 대신 "창이 보이는 동안만" 시간을 센다 — 트레이에 숨겨 자리를 비운 시간은
-    // 50분에 포함되지 않는다. 창을 보이는 채로 다른 일을 해도 시간은 그대로 흐르지만,
-    // 적어도 "컴퓨터를 아예 안 쓰고 있는데 알림이 울리는" 경우는 없앤다.
-    let mut active_secs: u64 = 0;
-    // "1시간마다 알림"의 기준 — 앱을 켠 시점(이 스레드가 시작된 시점)부터 흐른 시간.
-    // 정각(예: 3시 정각)에 맞추는 게 아니라 실행 후 60분마다다.
+    // 스트레칭 알림 기준 — 앱을 켠 시점(이 스레드가 시작된 시점)부터 흐른 시간.
+    // 정각(예: 3시 정각)에 맞추는 게 아니라 실행 후 60분마다다. 한때 "창이 보이는
+    // 시간만" 세는 50분짜리 알림을 따로 뒀는데, 알림이 두 종류로 나뉘어 헷갈리기만
+    // 해서 하나(이 1시간짜리, 설정에서 켜고 끌 수 있다)로 합쳤다.
     let mut last_chime = std::time::Instant::now();
 
     loop {
@@ -478,32 +505,15 @@ fn run_notifier(app: &tauri::AppHandle) {
             }
         }
 
-        let visible = app
-            .get_webview_window("main")
-            .and_then(|w| w.is_visible().ok())
-            .unwrap_or(true);
-        if visible {
-            active_secs += POLL_INTERVAL.as_secs();
-        }
-        if active_secs >= BREAK_INTERVAL.as_secs() {
-            let _ = app
-                .notification()
-                .builder()
-                .title("50분간 열일하셨습니다")
-                .body("잠시 일어나 스트레칭 해 보세요.")
-                .show();
-            active_secs = 0;
-        }
-
-        // 50분 스트레칭 알림과는 별개다 — 그쪽은 "일한 지 얼마나 됐는지", 이쪽은
-        // 단순히 "앱을 켠 뒤 몇 시간째인지"를 알린다. 꺼져 있는 동안에도 시간은
-        // 그대로 흘러서, 나중에 켜면 그 자리에서 바로 한 번 울린다 — 그것도 무해하다.
+        // 꺼져 있는 동안에도 시간은 그대로 흘러서, 나중에 켜면 그 자리에서 바로
+        // 한 번 울릴 수 있다 — 그것도 무해하다.
         if settings.hourly_chime && last_chime.elapsed() >= Duration::from_secs(3600) {
+            let (title, body) = random_hourly_phrase();
             let _ = app
                 .notification()
                 .builder()
-                .title("1시간이 지났습니다")
-                .body(format!("현재 시각 {}", Local::now().format("%H:%M")))
+                .title(title)
+                .body(format!("{body} (현재 {})", Local::now().format("%H:%M")))
                 .show();
             last_chime = std::time::Instant::now();
         }

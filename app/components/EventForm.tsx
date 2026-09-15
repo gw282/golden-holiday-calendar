@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import EventFields, { type EventFieldValues } from "./EventFields";
 import type { LeaveTypeOption } from "./leaveDays";
 import { parseQuickInput } from "@/lib/quickParse";
+import { today } from "@/lib/date";
 
 /** 팝업(AddEventButton) 안에서만 쓴다. 바깥 테두리는 dialog가 그리므로 여기선 폼만 그린다. */
 export default function EventForm({
@@ -48,11 +49,15 @@ export default function EventForm({
    * (`lib/quickParse.ts`, 외부 API 없는 순수 정규식 파서). 채우기만 하고 바로
    * 저장하진 않는다 — 파서가 못 알아들은 부분이 있을 수 있어 사람이 한 번 보고
    * 넘기는 편이 안전하다.
+   *
+   * "내일"·"모레"는 **항상 오늘 날짜 기준**이다. 팝업을 연 날짜(defaultDate,
+   * 달력에서 골라 둔 날일 수 있다)를 기준으로 삼으면 지난달 30일을 보다가
+   * "내일"을 치면 그 30일의 다음날로 계산돼 실제 오늘과 다른 날이 나온다.
    */
   function applyQuick() {
     const text = quickText.trim();
     if (!text) return;
-    const parsed = parseQuickInput(text, values.date || defaultDate);
+    const parsed = parseQuickInput(text, today());
     setValues((v) => ({
       ...v,
       title: parsed.title,
