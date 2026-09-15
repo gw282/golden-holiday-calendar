@@ -118,6 +118,11 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
               <span className="text-foreground">황금 연휴</span>에서 추천 기능을 켜거나 끌 수 있고,
               마음에 드는 조합은 바로 일정으로 등록할 수 있습니다.
             </Row>
+            <Row term="D-Day">
+              등록된 일정을 골라 오늘 기준 며칠 남았는지 확인합니다.{" "}
+              <span className="text-foreground">별 아이콘</span>으로 하나를 고정하면 헤더
+              버튼이 그 일정의 D-Day로 바뀝니다.
+            </Row>
             <Row term="일정 찾기">
               <span className="text-foreground">초성이나 키워드</span>로 일정을 검색할 수 있습니다.
               <br />
