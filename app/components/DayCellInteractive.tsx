@@ -115,23 +115,30 @@ export default function DayCellInteractive({
                   ✕
                 </button>
               </div>
-              <div className="flex gap-2 p-3">
-                <input
-                  value={emojiDraft}
-                  onChange={(e) => setEmojiDraft(e.target.value)}
-                  placeholder="🎂"
-                  maxLength={8}
-                  aria-label="날짜 칸에 표시할 이모지"
-                  title="날짜 칸 오른쪽 위에 표시됩니다"
-                  className="w-12 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
-                />
-                <input
-                  autoFocus
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="예: 오전 10시 주간 회의"
-                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent"
-                />
+              <div className="p-3">
+                <div className="flex gap-2">
+                  <input
+                    value={emojiDraft}
+                    onChange={(e) => setEmojiDraft(e.target.value)}
+                    placeholder="🎂"
+                    maxLength={8}
+                    aria-label="날짜 칸에 표시할 이모지"
+                    title="Win + . (마침표) 를 누르면 이모지 선택 창이 뜹니다"
+                    className="w-12 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
+                  />
+                  <input
+                    autoFocus
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="예: 오전 10시 주간 회의"
+                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <p className="mt-1.5 text-[10px] text-muted">
+                  이모지 칸에서 <kbd className="rounded border border-border px-1 font-sans">Win</kbd>+
+                  <kbd className="rounded border border-border px-1 font-sans">.</kbd> 을 누르면 윈도우
+                  이모지 선택 창이 뜹니다.
+                </p>
               </div>
               <div className="flex justify-end gap-2 border-t border-border px-3 py-2">
                 {(draft !== "" || emojiDraft !== "") && (

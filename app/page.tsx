@@ -400,9 +400,11 @@ export default async function Home(props: PageProps<"/">) {
           />
         </div>
         <div className="flex min-w-0 items-center gap-2">
-          {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다 */}
-          <DDayButton events={all} />
+          {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다.
+              황금 연휴가 이 앱의 대표 기능이라 먼저 두고, D-Day는 뒤이은 연차·특별휴가
+              D-day 타일과 "날짜를 센다"는 성격이 같아 그 옆으로 옮겼다. */}
           <HolidayFinderButton enabled={recsEnabled} />
+          <DDayButton events={all} />
           <LeaveBudgetButton leaves={leaves} />
         </div>
       </header>
