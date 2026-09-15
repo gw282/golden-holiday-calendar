@@ -92,6 +92,10 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
               <span className="text-foreground">횟수</span> 또는{" "}
               <span className="text-foreground">종료일까지</span> 중 골라 저장하세요.
             </Row>
+            <Row term="날짜 메모">
+              달력 칸을 <span className="text-foreground">더블클릭</span>하면 그 날짜에 한 줄
+              메모와 이모지를 남길 수 있습니다. 이 PC에만 저장되고 서버에는 안 올라갑니다.
+            </Row>
             <Row term="화면">
               <span className="text-foreground">비율 조정</span>으로 화면 크기를 바꾸고,{" "}
               <span className="text-foreground">다크모드·화이트모드</span>로 화면 테마를 선택할 수
