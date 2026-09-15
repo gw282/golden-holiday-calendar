@@ -16,6 +16,7 @@ import {
   isChatEnabled,
   isDesktopApp,
   isHourlyChimeEnabled,
+  isStartTimeReminderEnabled,
   isOffline,
   isRecommendationEnabled,
   REMINDER_THRESHOLD_OPTIONS,
@@ -46,6 +47,7 @@ import TodoList from "./components/TodoList";
 import EventList from "./components/EventList";
 import Shortcuts from "./components/Shortcuts";
 import HelpButton from "./components/HelpButton";
+import FeatureGuideButton from "./components/FeatureGuideButton";
 import Hint from "./components/Hint";
 import ThemeToggle from "./components/ThemeToggle";
 import ZoomToggle from "./components/ZoomToggle";
@@ -54,6 +56,7 @@ import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import SettingsPanel from "./components/SettingsPanel";
+import HolidayFinderButton from "./components/HolidayFinderButton";
 import Onboarding from "./components/Onboarding";
 
 // SQLite를 매 요청마다 읽는다 (정적 프리렌더 금지)
@@ -252,9 +255,6 @@ export default async function Home(props: PageProps<"/">) {
     minUnit: l.type.minUnit,
   }));
 
-  // MG쉬지 모드의 "휴가 금고" 카드가 쓴다 — 여러 휴가 종류 중 연차(정렬 첫 번째)를 집는다
-  const annualLeave = leaves.find((l) => l.type.sortOrder === 0) ?? leaves[0] ?? null;
-
   // 추천 아래 항공권 줄에 쓸 환율. **환산에 필요한 값만** 넘긴다 —
   // 환율표 전체를 늘어놓으면 달력보다 커진다. 못 받아도 화면은 그대로 그려진다 (lib/fx.ts 참고).
   // 오프라인이면 **부르지도 않는다.** 화면에서 감추기만 하면 서버는 여전히 밖으로 나가려다
@@ -263,6 +263,7 @@ export default async function Home(props: PageProps<"/">) {
   // 알림 시점 선택은 설치본에서만 뜻이 있다 — 웹 배포본엔 이 알림 자체가 없다.
   const reminderThresholds = isDesktopApp() ? await getReminderThresholds() : [];
   const hourlyChime = isDesktopApp() ? await isHourlyChimeEnabled() : false;
+  const startTimeReminder = isDesktopApp() ? await isStartTimeReminderEnabled() : false;
   // 자격 증명(.env.local)이 없으면 구글 단추는 눌러도 "설정하세요" 안내만 나온다.
   // 눌러도 아무것도 안 되는 단추를 화면에 두지 않는다 — 채워 넣으면 그때 나타난다.
   const showGoogle = !offline && googleConfigured();
@@ -293,20 +294,19 @@ export default async function Home(props: PageProps<"/">) {
    * 일정이 없는 날에는 목록 **위에** 펼쳐서, 있는 날에는 목록 **아래에 접어서** 놓는다.
    * 같은 JSX를 두 번 적으면 한쪽만 고치는 사고가 난다.
    */
-  const recommendation =
+  const mgShejiPanel =
     dayRows.length > 0 ? (
                 <div className="border-b border-border px-4 py-3">
-                  {/* 제목('황금연휴 추천')은 뺐다. 아래 칩이 이미 무슨 목록인지 말해 주고,
+                  {/* 제목은 뺐다. 아래 칩이 이미 무슨 목록인지 말해 주고,
                       공휴일이 없는 주에는 그 이름이 사실과도 맞지 않았다 */}
-                  {/* **한 문장으로 읽히게** 둔다 — `연차 [2일] 쓰는 황금연휴 추천`.
+                  {/* **한 문장으로 읽히게** 둔다 — `연차 [2일] 쓰는 황금연휴`.
                       예전 라벨은 `연차 사용일수`였는데, 그러면 이미 쓴 연차를 세어 놓은
                       지표처럼 읽힌다. 이건 지표가 아니라 **"며칠 쓸까"를 고르는 자리**이고
                       아래 목록이 그 답이다. 칩을 문장 가운데 끼워 넣으면 고르는 동작과
                       그 결과가 한 줄 안에서 이어진다.
   
-                      끝말은 **공휴일이 있는 주에만** `황금연휴 추천`이다. 공휴일이 없는 주에
-                      나오는 것은 주말을 늘린 것뿐이라 황금연휴라 부르면 사실이 아니게 된다.
-                      앱 이름이 황금연휴인데 정작 그 말이 화면에 없던 것도 이상했다. */}
+                      공휴일이 있는 주에는 `황금연휴`라고 표시한다. 공휴일이 없는 주에
+                      나오는 것은 주말을 늘린 것뿐이라 제목을 달리 표시한다. */}
                   <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                     <Hint
                       text={
@@ -332,7 +332,7 @@ export default async function Home(props: PageProps<"/">) {
                         "쓰면 이렇게 쉽니다"
                       ) : (
                         <>
-                          쓰는 <span className="font-medium text-leave">황금연휴 추천</span>
+                          쓰는 <span className="font-medium text-leave">🌟 황금연휴</span>
                         </>
                       )}
                     </span>
@@ -365,58 +365,6 @@ export default async function Home(props: PageProps<"/">) {
                 </div>
     ) : null;
 
-  /**
-   * MG쉬지 모드 전용 화면. 섹션은 둘 — "내 휴가 금고"(새로 만든 요약 카드)와
-   * "황금연휴 추천"(새로 안 만들고 normal-mode의 recommendation을 그대로 재사용).
-   * "팀원 부재 현황"(공유 폴더 기반)은 이 앱에 그런 데이터 소스가 아직 없어 뺐다 —
-   * 나중에 실제 소스가 정해지면 여기 세 번째 <section>으로 넣으면 된다.
-   */
-  const restModePanel = (
-    <div className="rest-mode">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold">내 휴가 금고</h2>
-          {annualLeave && annualLeave.total !== null ? (
-            <>
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-leave">
-                  {fmtRestNum(annualLeave.remaining ?? 0)}일
-                </span>
-                <span className="text-xs text-muted">/ {fmtRestNum(annualLeave.total)}일</span>
-              </div>
-              <div className="h-2.5 w-full overflow-hidden rounded-full bg-border">
-                <div
-                  className="h-full rounded-full bg-leave transition-[width] duration-700 ease-out"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, ((annualLeave.remaining ?? 0) / annualLeave.total) * 100))}%`,
-                  }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-muted">소멸까지 {annualLeave.daysLeft}일 남았습니다.</p>
-            </>
-          ) : (
-            <p className="text-xs text-muted">연차 총 일수를 먼저 넣어 주세요.</p>
-          )}
-        </section>
-
-        {/* 여기서 새로 만들지 않고 위 normal-mode가 쓰는 recommendation을 그대로
-            재사용한다 — "황금연휴 추천"은 앱에 하나만 있어야 하는 기능이고, MG쉬지
-            모드용으로 따로 단순화한 버전을 만들면 결국 서로 다른 두 개의 추천이
-            생겨 어느 쪽이 맞는지 헷갈리게 된다. */}
-        <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-          <h2 className="border-b border-border px-4 py-3 text-sm font-semibold">
-            황금연휴 추천
-          </h2>
-          {recommendation ?? (
-            <p className="px-4 py-3 text-xs text-muted">
-              고른 날({formatShortKo(selected)})에는 추천할 연휴가 없습니다.
-            </p>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-
   return (
     <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-6">
       <Onboarding />
@@ -427,39 +375,36 @@ export default async function Home(props: PageProps<"/">) {
         <div className="flex items-center gap-2">
           {/* 커서를 2초 올려 두면 이 앱이 뭘 하는지가 뜬다. 제목 옆에 부제를 늘 붙여 두면
               매일 보는 사람에게는 그냥 소음이라, 궁금할 때만 나오게 했다 */}
-          <Hint text="연차 하루를 놓아 연휴를 건넙니다. 달력에서 날짜를 고르면 오른쪽에 그 날이 낀 연휴 조합이 나옵니다.">
+          <Hint text="일정과 연차를 한 화면에서 관리합니다. 달력에서 날짜를 고르면 오른쪽에 그 날의 일정과 황금연휴가 함께 나옵니다.">
             <h1 className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
-              <span aria-hidden className="text-lg leading-none">🤗</span>
+              <img src="/icon.svg" alt="" aria-hidden className="h-5 w-5" />
               <span className="text-accent">MG</span> 매니지
             </h1>
           </Hint>
 
           <HelpButton desktop={isDesktopApp()} />
+          <FeatureGuideButton desktop={isDesktopApp()} />
           <ZoomToggle />
           <ThemeToggle />
-          {/* 황금연휴 추천 · 주차 표시 · 온라인/오프라인 · 알림 시점을 한데 모은 팝업.
+          {/* 황금연휴 · 주차 표시 · 온라인/오프라인 · 알림 시점을 한데 모은 팝업.
               헤더에 알약 단추를 하나씩 늘어놓지 않는다 */}
           <SettingsPanel
-            recsEnabled={recsEnabled}
             offline={offline}
             offlineLocked={process.env.OFFLINE_DEFAULT === "1"}
             isDesktop={isDesktopApp()}
             reminderOptions={REMINDER_THRESHOLD_OPTIONS}
             reminderSelected={reminderThresholds}
             hourlyChime={hourlyChime}
+            startTimeReminder={startTimeReminder}
           />
         </div>
         <div className="flex min-w-0 items-center gap-2">
           {/* 연차를 언제 쓸지 추천하면서 몇 개 남았는지를 안 보여 주면 반쪽이라 헤더에 둔다 */}
+          <HolidayFinderButton enabled={recsEnabled} />
           <LeaveBudgetButton leaves={leaves} />
         </div>
       </header>
 
-      {/* MG쉬지 모드(설정 팝업의 "🌴 MG쉬지 모드" 체크박스)가 켜지면 이 블록 전체가
-          숨고 restModePanel이 대신 보인다 — 진짜 상태는 <html data-mg-sheoji>뿐이고
-          (globals.css가 가른다), 두 블록 다 서버가 이미 그려서 내보낸다. 켤 때마다
-          다시 계산할 이유가 없다. */}
-      <div className="normal-mode">
       {/* 달력보다 위, 한 줄. 둘 다 **날짜와 무관하게 전체 일정**을 다루는 도구라 나란히 둔다 —
           다가오는 일정은 앞을 내다보고, 검색은 뒤를 되짚는다.
           아래 달력/일정과 **같은 12칸 격자(7:5)**를 쓴다. 폭이 어긋나면 네 칸이
@@ -472,7 +417,8 @@ export default async function Home(props: PageProps<"/">) {
       <div className="mb-4 grid gap-4 lg:grid-cols-12">
         <section className="flex min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-border bg-surface px-4 py-2 shadow-sm lg:col-span-7">
           <h2 className="shrink-0 text-xs font-semibold">
-            다가오는 일정 <span className="font-normal text-muted">{upcoming.length}건</span>
+            다가오는 일정{" "}
+            <span className="font-normal text-muted">{upcoming.length}건</span>
           </h2>
           {upcoming.length === 0 ? (
             <p className="text-xs text-muted">앞으로 2주 안에 등록된 일정이 없습니다.</p>
@@ -682,7 +628,7 @@ export default async function Home(props: PageProps<"/">) {
             {/* 공휴일 탐색 — 이름을 같이 적어 어디로 가는지 보이게 한다.
                 연도 브리핑이 '한 해를 훑는' 도구라면 이쪽은 '지금 자리에서 다음 쉬는 날'이다.
                 한동안 겹친다고 보고 내렸었는데, 묻는 질문이 서로 달라 되살렸다.
-                황금연휴 추천을 꺼 두면 공휴일 자체에 관심이 없다는 뜻이라 같이 숨긴다. */}
+                황금연휴를 꺼 두면 공휴일 자체에 관심이 없다는 뜻이라 같이 숨긴다. */}
             {recsEnabled && (
               <div className="flex min-w-0 shrink items-center gap-1">
                 {/* 좁아지면 이 라벨부터 사라진다. 화살표와 이름만 남아도 뜻은 통한다 */}
@@ -716,13 +662,15 @@ export default async function Home(props: PageProps<"/">) {
               <p className="font-semibold">아직 등록한 일정이 없습니다</p>
               <ul className="mt-2 flex list-disc flex-col gap-1 pl-4 text-xs text-muted">
                 <li>
-                  달력에서 날짜를 누르고 <span className="font-medium text-foreground">+ 추가</span>{" "}
+                  달력에서 날짜를 누르고 <span className="font-medium text-foreground">+ 일정 추가</span>{" "}
                   (또는 <kbd className="rounded border border-border px-1 font-sans">N</kbd>)
                 </li>
-                <li>
-                  <span className="font-medium text-leave">연차 등록</span>을 누르면 연휴 추천이
-                  바로 일정이 됩니다
-                </li>
+                {recsEnabled && (
+                  <li>
+                    <span className="font-medium text-leave">연차 등록</span>을 누르면 황금연휴 추천이
+                    바로 일정이 됩니다
+                  </li>
+                )}
               </ul>
             </section>
           )}
@@ -763,19 +711,19 @@ export default async function Home(props: PageProps<"/">) {
             {/* 일정이 없는 날에는 추천이 이 칸의 **답**이라 목록보다 위에 온다.
                 일정이 있는 날에는 아래로 내려가 접힌다 — 그 날의 답은 "오늘 뭐 하지"이지
                 "연차 언제 쓰지"가 아니기 때문이다. 아래 hasEvents 참고 */}
-            {!hasEvents && recommendation}
+            {!hasEvents && mgShejiPanel}
 
             <EventList
               events={dayEvents}
               showDate={false}
-              emptyText="이 날 잡힌 일정이 없습니다."
+              emptyText="이 날 등록된 일정이 없습니다."
               conflictIds={dayConflicts}
               leaveTypes={leaveTypes}
             />
 
             {/* 일정이 있는 날 — 추천은 목록 **아래에 접어** 둔다.
                 브라우저 기본 <details>라 클라이언트 JS가 붙지 않는다(연도 브리핑과 같은 방식). */}
-            {hasEvents && recommendation !== null && (
+            {hasEvents && mgShejiPanel !== null && (
               <details className="group border-t border-border">
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 px-4 py-2 text-[11px] text-muted marker:hidden hover:text-accent">
                   <span
@@ -784,9 +732,9 @@ export default async function Home(props: PageProps<"/">) {
                   >
                     ▶
                   </span>
-                  {holidayFree ? "연차 쓰면 며칠 쉬나 보기" : "황금연휴 추천 보기"}
+                  {holidayFree ? "연차 쓰면 며칠 쉬나 보기" : "🌟 황금연휴 보기"}
                 </summary>
-                {recommendation}
+                {mgShejiPanel}
               </details>
             )}
 
@@ -805,10 +753,6 @@ export default async function Home(props: PageProps<"/">) {
           )}
         </div>
       </div>
-      </div>
-
-      {restModePanel}
-
       {/* 백업과 구글 연동은 하루에 한 번도 안 누르는 것들이라 맨 아래에 조용히 둔다.
           구글 쪽은 붙여 놓기만 하면 알아서 도는 것이 목적이라 더 그렇다 */}
       <footer className="mt-6 flex flex-wrap items-center gap-2 border-t border-border pt-3">
@@ -820,7 +764,7 @@ export default async function Home(props: PageProps<"/">) {
             회사가 만든 것으로 오해되면 안 되기 때문이다. 로고는 뺐다 — 실제 회사
             상표를 출처 확인 없이 쓸 수 없어서다 */}
         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted opacity-70">
-          개인이 만든 사내용 도구
+          MG 매니지 · 일정 관리 도구
         </span>
       </footer>
     </main>
@@ -880,11 +824,6 @@ function LeaveChip({ label, active, href }: { label: string; active: boolean; hr
  * '추석 연휴'·'개천절 대체공휴일'은 같은 연휴의 일부라 한 이름으로 묶고,
  * '제9회 전국동시지방선거일'처럼 긴 이름은 줄여야 카드 폭이 무너지지 않는다.
  */
-/** 15 -> '15', 12.5 -> '12.5' — MG쉬지 모드의 휴가 금고 카드에 쓴다 */
-function fmtRestNum(n: number): string {
-  return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)));
-}
-
 function shortHolidayName(name: string): string {
   return name
     .replace(/ 대체공휴일$/, "")
