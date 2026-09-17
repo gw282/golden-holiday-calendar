@@ -251,6 +251,7 @@ function Cell({
       dayOfMonth={day.dayOfMonth}
       isToday={day.isToday}
       numberColorClass={numberColor}
+      lunar={day.lunar}
       style={{ paddingBottom: `${reservedPx + 6}px` }}
       className={`flex min-h-[84px] flex-col gap-0.5 border-r border-border p-1.5 text-left transition-colors [&:nth-child(7n)]:border-r-0 hover:bg-accent-soft/60 ${
         bottomBorder ? "border-b" : ""

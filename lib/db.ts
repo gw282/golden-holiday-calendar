@@ -39,7 +39,7 @@ const HOLIDAY_SEED_VERSION = 1;
  * 판이 같으면 DDL을 통째로 건너뛴다. 정상 상태에서 초기화 비용은 왕복 **두 번**이다
  * (meta 표 보장 + 판 읽기).
  */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * DB 커넥션 싱글턴.
@@ -413,57 +413,86 @@ async function migrate(db: Client) {
 /**
  * 휴가 종류 기본값과, 예전 `leave_budget`(연도별 한 종류)에서의 이관.
  *
- * 한 번만 돈다 — 이미 종류가 있으면 사용자가 고쳐 놓았을 수 있어 건드리지 않는다.
+ * 처음 세 종류(연차·특별휴가·공가)를 넣는 부분은 **한 번만** 돈다 — 이미 종류가
+ * 있으면 사용자가 고쳐 놓았을 수 있어(이름을 바꿨거나 지웠거나) 건드리지 않는다.
  * 입사일(anchor_date)은 사람마다 달라 비워 두고 화면에서 받는다. 비어 있는 동안에는
  * 달력해로 굴러가므로, 안 넣어도 앱이 멈추지는 않는다.
+ *
+ * 공가는 예비군 훈련·배심원 소집·투표 같은, 회사가 인정하지만 연차를 까지 않는
+ * 휴가다. 그래서 min_unit은 특별휴가와 같이 하루 단위만 두고, **총 일수(leave_grants)는
+ * 아예 안 넣는다** — 건별로 쓰는 것이라 "몇 일 중 몇 일 썼다"는 잔고 개념 자체가 없다.
+ * 총 일수가 없는 종류는 `summarize()`가 "잔고 없음"으로 자연히 뒤로 미룬다(leave.ts 참고).
  */
 async function seedLeaveTypes(db: Client) {
   const countRow = (await db.execute(`SELECT COUNT(*) AS n FROM leave_types`)).rows[0] as unknown as {
     n: number;
   };
-  if (Number(countRow.n) > 0) return;
 
-  await db.batch(
-    [
-      // 연차: 입사일 기준 · 반반차까지 · 소멸
-      {
-        sql: `INSERT INTO leave_types (name, cycle, anchor_date, min_unit, carry_over, sort_order)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: ["연차", "anniversary", null, 0.25, 0, 0],
-      },
-      // 특별휴가: 달력해 · 하루 단위만 · 연말 소멸
-      {
-        sql: `INSERT INTO leave_types (name, cycle, anchor_date, min_unit, carry_over, sort_order)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-        args: ["특별휴가", "calendar", null, 1, 0, 1],
-      },
-    ],
-    "write",
-  );
+  if (Number(countRow.n) === 0) {
+    await db.batch(
+      [
+        // 연차: 입사일 기준 · 반반차까지 · 소멸
+        {
+          sql: `INSERT INTO leave_types (name, cycle, anchor_date, min_unit, carry_over, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: ["연차", "anniversary", null, 0.25, 0, 0],
+        },
+        // 특별휴가: 달력해 · 하루 단위만 · 연말 소멸
+        {
+          sql: `INSERT INTO leave_types (name, cycle, anchor_date, min_unit, carry_over, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: ["특별휴가", "calendar", null, 1, 0, 1],
+        },
+        // 공가: 달력해 · 하루 단위만 · 총 일수 없음(건별 사용, 잔고 개념 없음)
+        {
+          sql: `INSERT INTO leave_types (name, cycle, anchor_date, min_unit, carry_over, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?)`,
+          args: ["공가", "calendar", null, 1, 0, 2],
+        },
+      ],
+      "write",
+    );
 
-  const annual = (await db.execute(`SELECT id FROM leave_types WHERE sort_order = 0`))
-    .rows[0] as unknown as { id: number } | undefined;
-  if (!annual) return;
-  const annualId = Number(annual.id);
+    const annual = (await db.execute(`SELECT id FROM leave_types WHERE sort_order = 0`))
+      .rows[0] as unknown as { id: number } | undefined;
+    if (annual) {
+      const annualId = Number(annual.id);
 
-  // 예전에 넣어 둔 연도별 총 연차를 그대로 옮긴다. 잃는 것 없이 새 구조로 넘어간다.
-  const old = (await db.execute(`SELECT year, total_days FROM leave_budget`))
-    .rows as unknown as Array<{ year: number; total_days: number }>;
+      // 예전에 넣어 둔 연도별 총 연차를 그대로 옮긴다. 잃는 것 없이 새 구조로 넘어간다.
+      const old = (await db.execute(`SELECT year, total_days FROM leave_budget`))
+        .rows as unknown as Array<{ year: number; total_days: number }>;
 
-  await db.batch(
-    [
-      ...old.map((row) => ({
-        sql: `INSERT OR IGNORE INTO leave_grants (type_id, period_start, total_days) VALUES (?, ?, ?)`,
-        args: [annualId, `${row.year}-01-01`, row.total_days] as InArgs,
-      })),
-      // 기존 연차 일정에도 종류를 달아 준다
-      {
-        sql: `UPDATE events SET leave_type_id = ? WHERE is_leave = 1 AND leave_type_id IS NULL`,
-        args: [annualId] as InArgs,
-      },
-    ],
-    "write",
-  );
+      await db.batch(
+        [
+          ...old.map((row) => ({
+            sql: `INSERT OR IGNORE INTO leave_grants (type_id, period_start, total_days) VALUES (?, ?, ?)`,
+            args: [annualId, `${row.year}-01-01`, row.total_days] as InArgs,
+          })),
+          // 기존 연차 일정에도 종류를 달아 준다
+          {
+            sql: `UPDATE events SET leave_type_id = ? WHERE is_leave = 1 AND leave_type_id IS NULL`,
+            args: [annualId] as InArgs,
+          },
+        ],
+        "write",
+      );
+    }
+  }
+
+  // 위 블록을 이미 지난 옛 사용자(연차·특별휴가만 있는 DB)에게도 공가를 새로 더해 준다.
+  // 이름으로만 확인하는 이유는 위와 같다 — 사용자가 "공가"를 지웠거나 다른 이름으로
+  // 바꿔 쓰고 있으면 그 선택을 존중하고 다시 넣지 않는다.
+  const gongga = (await db.execute(`SELECT id FROM leave_types WHERE name = '공가'`)).rows[0];
+  if (!gongga) {
+    const maxSort = (
+      await db.execute(`SELECT COALESCE(MAX(sort_order), -1) AS m FROM leave_types`)
+    ).rows[0] as unknown as { m: number };
+    await db.execute({
+      sql: `INSERT INTO leave_types (name, cycle, anchor_date, min_unit, carry_over, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: ["공가", "calendar", null, 1, 0, Number(maxSort.m) + 1],
+    });
+  }
 }
 
 async function seed(db: Client) {

@@ -135,7 +135,7 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
             </Row>
             <Row term="날짜 메모">
               달력 칸을 <span className="text-foreground">더블클릭</span>하면 그 날짜에 한 줄
-              메모와 이모지(최대 3개)를 남길 수 있습니다. 이모지는{" "}
+              메모와 이모지(1개)를 남길 수 있습니다. 이모지는{" "}
               <span className="text-foreground">Win + .</span> 으로 윈도우 이모지 선택 창을 불러
               고르세요.
             </Row>

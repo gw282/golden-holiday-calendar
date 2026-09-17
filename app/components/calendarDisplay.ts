@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 달력 그리드의 순수 화면 취향 두 가지 — 주차 표시 · 절기 표시.
+ * 달력 그리드의 순수 화면 취향 세 가지 — 주차 표시 · 절기 표시 · 음력 표시.
  * `ThemeToggle`과 같은 방식이다: 진짜 상태는 `<html>` 속성 하나(+ localStorage)에
  * 있고, React state로 복제하지 않는다. CSS가 `[data-*]` 속성으로 보이기/숨기기만
  * 하므로 CalendarGrid(서버 컴포넌트)는 손대지 않고 늘 그대로 그린다.
@@ -14,6 +14,8 @@ const WEEK_NUM_KEY = "weekNum";
 const WEEK_NUM_CHANGED = "weeknumchange";
 const SOLAR_TERM_KEY = "solarTerm";
 const SOLAR_TERM_CHANGED = "solartermchange";
+const LUNAR_KEY = "lunar";
+const LUNAR_CHANGED = "lunarchange";
 
 export function weekNumOn(): boolean {
   return document.documentElement.dataset.weekNum !== "off";
@@ -74,4 +76,35 @@ export function setSolarTerm(on: boolean) {
     }
   }
   window.dispatchEvent(new Event(SOLAR_TERM_CHANGED));
+}
+
+/** 기본은 꺼짐 — 매일 있는 값이라 켜면 모든 칸이 한 줄씩 늘어난다 */
+export function lunarOn(): boolean {
+  return document.documentElement.dataset.lunar === "on";
+}
+export function lunarOnServer(): boolean {
+  return false;
+}
+export function subscribeLunar(onChange: () => void) {
+  window.addEventListener(LUNAR_CHANGED, onChange);
+  return () => window.removeEventListener(LUNAR_CHANGED, onChange);
+}
+export function setLunar(on: boolean) {
+  const root = document.documentElement;
+  if (on) {
+    root.dataset.lunar = "on";
+    try {
+      localStorage.setItem(LUNAR_KEY, "on");
+    } catch {
+      // 무시
+    }
+  } else {
+    delete root.dataset.lunar;
+    try {
+      localStorage.removeItem(LUNAR_KEY);
+    } catch {
+      // 무시
+    }
+  }
+  window.dispatchEvent(new Event(LUNAR_CHANGED));
 }

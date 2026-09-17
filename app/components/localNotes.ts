@@ -55,14 +55,27 @@ export function hasNote(date: string): boolean {
  * "이 날 출장" "이 날 생일" 같은 걸 한눈에 표시하는 용도라 텍스트 검색·정렬
  * 대상이 될 필요가 없다. 메모와 별도 키에 저장해서, 이모지만 찍고 메모는
  * 안 남기는 경우에도 서로 안 얽힌다.
+ *
+ * 1개만 보여준다 — 날짜 숫자와 같은 줄에 나란히 두는 칸이 좁다. `readEmoji`에서
+ * 자르는 이유는 저장할 때만 잘라 두면 예전에 여러 개를 넣어 뒀던 날짜가 그대로
+ * 남기 때문이다 — 읽을 때 매번 자르면 새 글자를 저장하지 않아도 표시가 바로
+ * 줄어든다. `string.length`로 자르면 이모지 하나가 UTF-16 코드 유닛을 여러 개
+ * 쓰는 경우(피부톤·국기·ZWJ 합성 이모지 등) 중간이 잘려 깨진 글자가 남는다 —
+ * `Intl.Segmenter`로 "사람이 보는 글자 하나" 단위(grapheme)로 세야 정확하다.
  */
+function limitEmoji(text: string): string {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
+  return graphemes.slice(0, 1).join("");
+}
+
 export function readEmoji(date: string): string {
-  return readMap(EMOJI_KEY)[date] ?? "";
+  return limitEmoji(readMap(EMOJI_KEY)[date] ?? "");
 }
 
 export function writeEmoji(date: string, emoji: string) {
   const emojis = readMap(EMOJI_KEY);
-  const trimmed = emoji.trim();
+  const trimmed = limitEmoji(emoji.trim());
   if (trimmed === "") delete emojis[date];
   else emojis[date] = trimmed;
   writeMap(EMOJI_KEY, emojis);

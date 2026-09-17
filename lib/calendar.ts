@@ -1,6 +1,7 @@
 import { all, get } from "./db";
 import { isMultiDay, listEventsBetween, type Event } from "./events";
 import type { Holiday } from "./holidays";
+import { lunarInRange } from "./lunar";
 import { milestonesInRange, type Milestone } from "./milestones";
 import { solarTermsInRange } from "./solarTerms";
 import {
@@ -61,6 +62,8 @@ export type CalendarDay = {
   milestone: Milestone | null;
   /** 24절기 이름. 태양 기준이라 매년 계산한다(`solarTerms.ts`) — 표시 전용, DB 미참조 */
   solarTerm: string | null;
+  /** 음력 일자("15") 또는 초하루("8월 1일"). 매일 있는 값이라 null이 아니다 — 표시 전용, DB 미참조 */
+  lunar: string;
   events: Event[];
 };
 
@@ -90,6 +93,7 @@ export async function buildMonth(
   const holidays = await holidayMap(gridStart, gridEnd);
   const milestones = milestonesInRange(gridStart, gridEnd, new Set(holidays.keys()));
   const solarTerms = solarTermsInRange(gridStart, gridEnd);
+  const lunarDates = lunarInRange(gridStart, gridEnd);
 
   const byDate = new Map<DateStr, Event[]>();
   const spanning: Event[] = [];
@@ -120,6 +124,7 @@ export async function buildMonth(
         holiday: holidays.get(cursor) ?? null,
         milestone: milestones.get(cursor) ?? null,
         solarTerm: solarTerms.get(cursor) ?? null,
+        lunar: lunarDates.get(cursor) ?? "",
         events: byDate.get(cursor) ?? [],
       });
       cursor = addDays(cursor, 1);

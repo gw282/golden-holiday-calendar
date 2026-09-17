@@ -27,6 +27,9 @@ const WEEK_NUM_SCRIPT = `try{if(localStorage.getItem("weekNum")==="off")document
 /** 절기 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. 기본은 꺼짐이라 "on"일 때만 켠다 */
 const SOLAR_TERM_SCRIPT = `try{if(localStorage.getItem("solarTerm")==="on")document.documentElement.dataset.solarTerm="on"}catch(e){}`;
 
+/** 음력 표시도 같은 이유로 첫 페인트 전에 붙인다. 기본은 꺼짐이라 "on"일 때만 켠다 */
+const LUNAR_SCRIPT = `try{if(localStorage.getItem("lunar")==="on")document.documentElement.dataset.lunar="on"}catch(e){}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     // 위 스크립트가 서버 HTML에 없던 data-theme을 붙이므로 하이드레이션 경고를 끈다
@@ -36,6 +39,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: ZOOM_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: WEEK_NUM_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: SOLAR_TERM_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: LUNAR_SCRIPT }} />
         <BirdsBackground />
         {children}
       </body>

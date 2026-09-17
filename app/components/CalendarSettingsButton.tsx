@@ -3,11 +3,16 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { WeekStart } from "@/lib/date";
+import Toggle from "./Toggle";
 import {
+  lunarOn,
+  lunarOnServer,
+  setLunar,
   setSolarTerm,
   setWeekNum,
   solarTermOn,
   solarTermOnServer,
+  subscribeLunar,
   subscribeSolarTerm,
   subscribeWeekNum,
   weekNumOn,
@@ -31,6 +36,7 @@ export default function CalendarSettingsButton({ weekStart }: { weekStart: WeekS
   const rootRef = useRef<HTMLDivElement>(null);
   const weekNum = useSyncExternalStore(subscribeWeekNum, weekNumOn, weekNumOnServer);
   const solarTerm = useSyncExternalStore(subscribeSolarTerm, solarTermOn, solarTermOnServer);
+  const lunar = useSyncExternalStore(subscribeLunar, lunarOn, lunarOnServer);
 
   useEffect(() => {
     if (!open) return;
@@ -90,25 +96,20 @@ export default function CalendarSettingsButton({ weekStart }: { weekStart: WeekS
 
       {open && (
         <div className="absolute left-0 top-full z-30 mt-1 flex w-64 flex-col gap-3 rounded-lg border border-border bg-raised p-3 shadow-lg">
-          <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+          <div className="flex items-center justify-between gap-2 text-xs text-foreground">
             절기 표시
-            <input
-              type="checkbox"
-              checked={solarTerm}
-              onChange={(e) => setSolarTerm(e.target.checked)}
-              className="h-3.5 w-3.5 accent-accent"
-            />
-          </label>
+            <Toggle checked={solarTerm} onChange={setSolarTerm} label="절기 표시" />
+          </div>
 
-          <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+          <div className="flex items-center justify-between gap-2 text-xs text-foreground">
             주차 표시
-            <input
-              type="checkbox"
-              checked={weekNum}
-              onChange={(e) => setWeekNum(e.target.checked)}
-              className="h-3.5 w-3.5 accent-accent"
-            />
-          </label>
+            <Toggle checked={weekNum} onChange={setWeekNum} label="주차 표시" />
+          </div>
+
+          <div className="flex items-center justify-between gap-2 text-xs text-foreground">
+            음력 표시
+            <Toggle checked={lunar} onChange={setLunar} label="음력 표시" />
+          </div>
 
           <div className="border-t border-border pt-3">
             <p className="text-xs text-foreground">주 시작 요일</p>

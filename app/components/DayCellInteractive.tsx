@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { formatKo } from "@/lib/date";
 import {
-  hasEmoji,
   hasNote,
   readEmoji,
   readNote,
@@ -13,18 +12,6 @@ import {
   writeEmoji,
   writeNote,
 } from "./localNotes";
-
-/**
- * 이모지 최대 3개로 자른다. `string.length`로 자르면 이모지 하나가 UTF-16
- * 코드 유닛을 여러 개 쓰는 경우(피부톤·국기·ZWJ 합성 이모지 등) 중간이
- * 잘려 깨진 글자가 남는다 — `Intl.Segmenter`로 "사람이 보는 글자 하나"
- * 단위(grapheme)로 세야 정확하다.
- */
-function limitEmoji(text: string): string {
-  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-  const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
-  return graphemes.slice(0, 3).join("");
-}
 
 /**
  * 달력 셀의 얇은 클라이언트 리프.
@@ -45,6 +32,7 @@ export default function DayCellInteractive({
   dayOfMonth,
   isToday,
   numberColorClass,
+  lunar,
   className,
   style,
   children,
@@ -57,6 +45,10 @@ export default function DayCellInteractive({
   dayOfMonth: number;
   isToday: boolean;
   numberColorClass: string;
+  /** 음력 표시도 같은 이유로 여기서 받는다 — 날짜 숫자 바로 옆, 같은 줄에 놓아야
+      "이 날의 음력"이라는 관계가 눈에 들어온다. 메모 점(우측 상단 절대 위치)과는
+      떨어져 있어 겹칠 일이 없다. */
+  lunar: string;
   className: string;
   style: CSSProperties;
   children: ReactNode;
@@ -81,8 +73,8 @@ export default function DayCellInteractive({
     writeNote(date, draft);
     // 입력 중(onChange)에 자르지 않는다 — 윈도우 이모지 선택 창은 문자를 여러 단계로
     // 조합해서 넣는데, 그 중간에 값을 강제로 바꾸면 조합이 깨져 서로게이트 페어가
-    // 반쪽만 남는 등 훨씬 지저분한 값이 쌓인다. 저장하는 이 순간에만 자른다.
-    writeEmoji(date, limitEmoji(emojiDraft));
+    // 반쪽만 남는 등 훨씬 지저분한 값이 쌓인다. 자르는 건 writeEmoji 안에서 한다.
+    writeEmoji(date, emojiDraft);
     dialog.current?.close();
   }
 
@@ -103,8 +95,12 @@ export default function DayCellInteractive({
         style={style}
         className={`relative ${className}`}
       >
-        {/* 이모지는 날짜 숫자와 같은 줄, 같은 높이로 바로 옆에 붙인다 — 따로
-            구석에 떠 있으면 "이 날의 표시"라는 연결이 눈에 잘 안 들어온다. */}
+        {/* 이모지·음력은 날짜 숫자와 같은 줄, 같은 높이로 바로 옆에 붙인다 — 따로
+            구석에 떠 있으면 "이 날의 표시"라는 연결이 눈에 잘 안 들어온다.
+            음력은 숫자 바로 뒤(날짜 사실끼리 묶임)에 둔다. 이모지는 반대로
+            줄 오른쪽 끝으로 민다(ml-auto) — 메모 점(우측 상단 절대 위치)과 가까워
+            지므로 mr-2.5로 거리를 둔다. 1개로 제한해 둔 덕에(localNotes.ts의
+            limitEmoji) 아무리 커도 그 여백을 넘어 점과 겹치지 않는다. */}
         <span className="flex items-center gap-1">
           <span
             className={`grid h-5 w-5 shrink-0 place-items-center rounded-full p-0 text-center text-xs font-medium leading-5 ${
@@ -113,8 +109,11 @@ export default function DayCellInteractive({
           >
             {dayOfMonth}
           </span>
+          <span className="lunar-date shrink-0 whitespace-nowrap text-[9px] leading-none text-muted">
+            {lunar}
+          </span>
           {emoji && (
-            <span aria-hidden className="text-sm leading-none">
+            <span aria-hidden className="ml-auto mr-2.5 shrink-0 whitespace-nowrap text-sm leading-none">
               {emoji}
             </span>
           )}
@@ -154,9 +153,9 @@ export default function DayCellInteractive({
                     value={emojiDraft}
                     onChange={(e) => setEmojiDraft(e.target.value)}
                     placeholder="🎂"
-                    aria-label="날짜 칸에 표시할 이모지 (최대 3개)"
-                    title="최대 3개 · Win + . (마침표) 를 누르면 이모지 선택 창이 뜹니다"
-                    className="w-16 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
+                    aria-label="날짜 칸에 표시할 이모지 (1개)"
+                    title="1개만 표시됩니다 · Win + . (마침표) 를 누르면 이모지 선택 창이 뜹니다"
+                    className="w-12 shrink-0 rounded-md border border-border bg-background px-2 py-1.5 text-center text-sm outline-none focus:border-accent"
                   />
                   <input
                     autoFocus

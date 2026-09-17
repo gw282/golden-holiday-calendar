@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { invoke } from "@tauri-apps/api/core";
 import TimePicker from "./TimePicker";
+import Toggle from "./Toggle";
 
 /**
  * 헤더에 따로따로 있던 켜고/끄는 단추들(황금연휴 · 주차 표시 · 온라인/오프라인 ·
@@ -176,16 +177,15 @@ export default function SettingsPanel({
               </div>
             ) : (
               <div className="border-b border-border pb-3">
-                <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+                <div className="flex items-center justify-between gap-2 text-xs text-foreground">
                   온라인 기능
-                  <input
-                    type="checkbox"
+                  <Toggle
                     checked={!offline}
                     disabled={busy}
                     onChange={() => patchSettings({ offline: !offline })}
-                    className="h-3.5 w-3.5 accent-accent"
+                    label="온라인 기능"
                   />
-                </label>
+                </div>
                 <p className="mt-1 text-[10px] leading-snug text-muted">
                   항공권·숙소·환율·챗봇 기능을 사용합니다.
                 </p>
@@ -203,30 +203,28 @@ export default function SettingsPanel({
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="flex items-center justify-between gap-2 text-xs text-foreground">
+                <div className="flex items-center justify-between gap-2 text-xs text-foreground">
                   시작 시 알림
-                  <input
-                    type="checkbox"
+                  <Toggle
                     checked={startTimeReminder}
                     disabled={busy}
                     onChange={toggleStartTimeReminder}
-                    className="h-3.5 w-3.5 accent-accent"
+                    label="시작 시 알림"
                   />
-                </label>
+                </div>
                 {reminderOptions.map((minutes) => (
-                  <label
+                  <div
                     key={minutes}
                     className="flex items-center justify-between gap-2 text-xs text-foreground"
                   >
                     {REMINDER_LABELS[minutes] ?? `${minutes}분 전`}
-                    <input
-                      type="checkbox"
+                    <Toggle
                       checked={checkedReminders.has(minutes)}
                       disabled={busy}
                       onChange={() => toggleReminder(minutes)}
-                      className="h-3.5 w-3.5 accent-accent"
+                      label={REMINDER_LABELS[minutes] ?? `${minutes}분 전`}
                     />
-                  </label>
+                  </div>
                 ))}
               </div>
 
@@ -242,13 +240,11 @@ export default function SettingsPanel({
                     <h3 className="text-xs font-semibold text-foreground">휴식 알림</h3>
                     <p className="mt-1 text-[10px] text-muted">고른 시각부터 매시 정각에 알려 줍니다.</p>
                   </div>
-                  <input
-                    type="checkbox"
+                  <Toggle
                     checked={chime}
                     disabled={busy}
                     onChange={toggleChime}
-                    className="h-3.5 w-3.5 shrink-0 accent-accent"
-                    aria-label="휴식 알림 (1시간 간격)"
+                    label="휴식 알림 (1시간 간격)"
                   />
                 </div>
                 {chime && (

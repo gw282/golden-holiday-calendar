@@ -79,7 +79,7 @@ export default function FeatureGuideButton({ desktop = false }: { desktop?: bool
             <FeatureCard icon="⏳" title="D-Day 찾기" detail="등록된 전체 일정을 오늘과 가까운 순으로 보여주고, 각 일정까지 며칠 남았는지(D-N)·지났는지(D+N)를 바로 계산해 줍니다. 별 아이콘으로 하나를 고정하면 헤더 버튼 자체가 그 일정의 D-Day로 바뀝니다.">
               아무 일정이나 골라 오늘 기준 D-Day를 확인하고, 하나를 헤더에 고정할 수 있습니다.
             </FeatureCard>
-            <FeatureCard icon="✅" title="업무 보조" detail="날짜별 한 줄 메모와 이모지(최대 3개), 할 일을 따로 관리하고, 선택한 날짜의 일정을 업무보고용 텍스트로 복사할 수 있습니다.">
+            <FeatureCard icon="✅" title="업무 보조" detail="날짜별 한 줄 메모와 이모지(1개), 할 일을 따로 관리하고, 선택한 날짜의 일정을 업무보고용 텍스트로 복사할 수 있습니다.">
               날짜별 메모·이모지와 할 일을 관리하고 업무보고용 텍스트를 복사합니다.
             </FeatureCard>
             <FeatureCard icon="🖥️" title="화면 설정" detail="화면 배율(50~200%, Ctrl+휠로도 조정)과 라이트·다크·시스템 테마를 한 팝업에서 바꿀 수 있습니다. 윈도우 앱에서는 알림 설정에서 일정 알림 시점과 1시간 간격 휴식 알림도 따로 조정할 수 있습니다.">

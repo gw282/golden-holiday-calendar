@@ -113,3 +113,8 @@ html[data-week-num="off"] .week-num {
 html:not([data-solar-term="on"]) .solar-term {
   display: none;
 }
+
+/* 음력 표시도 절기와 같은 이유로 기본 꺼짐 — 매일 있는 값이라 켜면 칸마다 한 줄씩 늘어난다 */
+html:not([data-lunar="on"]) .lunar-date {
+  display: none;
+}
