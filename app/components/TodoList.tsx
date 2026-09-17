@@ -114,7 +114,7 @@ export default function TodoList() {
     <section className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold">오늘 할 일</h2>
+          <h2 className="text-sm font-semibold">할 일</h2>
           {/* ponytail: 위젯 창이 Windows에서 투명 배경 없이 흰 화면으로만 뜨는 문제가
               안 풀려서 버튼을 일단 뺀다 — WebView2 투명 처리 원인 찾으면 되살릴 것 */}
         </div>

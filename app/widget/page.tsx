@@ -23,7 +23,7 @@ export default async function TodoWidgetPage() {
         data-tauri-drag-region
         className="flex h-11 items-center justify-between bg-yellow-300/55 px-4 text-sm font-semibold dark:bg-slate-700/70"
       >
-        <span>오늘의 할 일</span>
+        <span>할 일</span>
         <WidgetCloseButton />
       </header>
 

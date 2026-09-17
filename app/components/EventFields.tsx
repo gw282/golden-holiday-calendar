@@ -77,6 +77,50 @@ function Row({ label, children }: { label: React.ReactNode; children: React.Reac
 }
 
 /**
+ * 선택지가 몇 개 안 되는 값을 고르는 알약 버튼 묶음 — 네이티브 `<select>` 대신 쓴다.
+ * 반복 종료 방식(횟수로/종료일까지)에서 먼저 쓰던 모양을 그대로 재사용 가능하게 뺐다.
+ */
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  disabled,
+  ariaLabel,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="flex flex-wrap items-center gap-0.5 rounded-lg bg-background p-0.5"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          disabled={disabled}
+          className={`rounded-md px-2 py-0.5 text-[11px] transition-colors disabled:opacity-40 ${
+            value === o.value
+              ? "bg-surface font-medium text-accent shadow-sm"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 일정 입력.
  *
  * **쓰지 않는 칸은 비활성이 아니라 아예 감춘다.** 예전에는 종료일·시각·반복 횟수가
@@ -273,19 +317,13 @@ export default function EventFields({
 
           {/* 종류가 둘 이상일 때만 고르게 한다. 하나뿐이면 물어볼 것이 없다 */}
           {value.isLeave && leaveTypes.length > 1 && (
-            <select
+            <Segmented
+              options={leaveTypes.map((t) => ({ value: String(t.id), label: t.name }))}
               value={value.leaveTypeId || String(leaveTypes[0].id)}
-              onChange={(e) => onChange({ ...value, leaveTypeId: e.target.value, leaveDays: "" })}
+              onChange={(v) => onChange({ ...value, leaveTypeId: v, leaveDays: "" })}
               disabled={disabled}
-              aria-label="휴가 종류"
-              className={`${SELECT} py-1`}
-            >
-              {leaveTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              ariaLabel="휴가 종류"
+            />
           )}
 
           {/* 하루 단위 휴가에는 직접 입력 칸을 두지 않는다 (반차를 못 쓴다) */}
@@ -293,7 +331,11 @@ export default function EventFields({
             <input
               type="number"
               min={0}
-              max={365}
+              // 자동 계산값(autoLeave)보다 크게 넣을 이유는 없다 — 그 기간에 낼 수
+              // 있는 최대치를 넘어선다. 자동값과 같은 값(예: 하루짜리에 1)은 그대로
+              // 두는데, 조정 버튼(스피너)으로 눌러 올라갈 때 자연스럽게 자동값까지
+              // 닿아야 하기 때문이다.
+              max={autoLeave}
               step={minUnit}
               value={value.leaveDays}
               onChange={(e) => set("leaveDays", e.target.value)}
@@ -308,44 +350,28 @@ export default function EventFields({
 
         {allowRepeat && (
           <Row label="반복">
-            <select
+            <Segmented
+              options={REPEAT_OPTIONS}
               value={value.repeatFreq}
-              onChange={(e) => set("repeatFreq", e.target.value)}
+              onChange={(v) => set("repeatFreq", v)}
               disabled={disabled}
-              aria-label="반복 주기"
-              className={SELECT}
-            >
-              {REPEAT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              ariaLabel="반복 주기"
+            />
             {/* 반복을 고르지 않았으면 횟수·종료일 칸은 뜻이 없다 */}
             {value.repeatFreq && (
               <>
-                <div className="flex items-center gap-0.5 rounded-lg bg-background p-0.5">
-                  {(
+                <Segmented
+                  options={
                     [
-                      { mode: "count", label: "횟수로" },
-                      { mode: "until", label: "종료일까지" },
+                      { value: "count", label: "횟수로" },
+                      { value: "until", label: "종료일까지" },
                     ] as const
-                  ).map((o) => (
-                    <button
-                      key={o.mode}
-                      type="button"
-                      onClick={() => set("repeatMode", o.mode)}
-                      disabled={disabled}
-                      className={`rounded-md px-2 py-0.5 text-[11px] transition-colors ${
-                        value.repeatMode === o.mode
-                          ? "bg-surface font-medium text-accent shadow-sm"
-                          : "text-muted hover:text-foreground"
-                      }`}
-                    >
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
+                  }
+                  value={value.repeatMode}
+                  onChange={(v) => set("repeatMode", v)}
+                  disabled={disabled}
+                  ariaLabel="반복 종료 방식"
+                />
                 {value.repeatMode === "count" ? (
                   <>
                     <input

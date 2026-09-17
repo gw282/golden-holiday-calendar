@@ -87,8 +87,8 @@ export default function FeatureGuideButton({ desktop = false }: { desktop?: bool
             </FeatureCard>
             {desktop && (
               <>
-                <FeatureCard icon="✅" title="바탕화면 할 일" detail="오늘 할 일 목록의 바탕화면에 띄우기를 누르면 다른 앱 위에 반투명 위젯이 표시됩니다. 위젯에서 완료 표시를 바꾸면 메인 앱과 바로 동기화됩니다.">
-                  오늘 할 일을 바탕화면 위젯으로 띄우고 완료 상태를 함께 관리합니다.
+                <FeatureCard icon="✅" title="바탕화면 할 일" detail="할 일 목록의 바탕화면에 띄우기를 누르면 다른 앱 위에 반투명 위젯이 표시됩니다. 위젯에서 완료 표시를 바꾸면 메인 앱과 바로 동기화됩니다.">
+                  할 일을 바탕화면 위젯으로 띄우고 완료 상태를 함께 관리합니다.
                 </FeatureCard>
                 <FeatureCard icon="🔔" title="윈도우 알림" detail="시작 시 알림, 15분 전·30분 전·1시간 전·2시간 전 알림을 필요한 것만 선택할 수 있습니다. 1시간 간격 휴식 알림도 제공하며, 알림 테스트를 누르면 일정 또는 휴식 알림 문구가 바로 표시됩니다.">
                   일정 알림과 휴식 알림을 설정하고 실제 알림을 테스트합니다.

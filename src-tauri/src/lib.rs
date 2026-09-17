@@ -74,7 +74,7 @@ fn open_todo_widget(app: tauri::AppHandle) -> Result<(), String> {
                 .map_err(|e| format!("위젯 주소를 만들 수 없습니다: {e}"))?,
         ),
     )
-    .title("오늘의 할 일")
+    .title("할 일")
     .inner_size(320.0, 360.0)
     .min_inner_size(260.0, 180.0)
     .transparent(true)

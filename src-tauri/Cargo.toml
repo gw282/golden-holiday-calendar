@@ -1,6 +1,6 @@
 [package]
 name = "mg-manage"
-version = "1.3.0"
+version = "1.4.0"
 description = "MG 매니지 데스크톱 셸"
 authors = ["MG 매니지"]
 edition = "2021"
