@@ -42,6 +42,9 @@ export default function DayCellInteractive({
   date,
   href,
   selected,
+  dayOfMonth,
+  isToday,
+  numberColorClass,
   className,
   style,
   children,
@@ -49,6 +52,11 @@ export default function DayCellInteractive({
   date: string;
   href: string;
   selected: boolean;
+  /** 날짜 숫자는 서버(Cell)가 계산해 값만 넘긴다 — 이모지를 그 옆 같은 줄에
+      나란히 그리려면 이 컴포넌트가 직접 배지를 그려야 하기 때문이다. */
+  dayOfMonth: number;
+  isToday: boolean;
+  numberColorClass: string;
   className: string;
   style: CSSProperties;
   children: ReactNode;
@@ -95,15 +103,25 @@ export default function DayCellInteractive({
         style={style}
         className={`relative ${className}`}
       >
-        {children}
-        {/* 날짜 숫자가 이미 셀 왼쪽 위를 쓰고 있어서(서버가 그리는 Cell), 이모지·메모
-            표시는 오른쪽 위 한 자리에 같이 묶어 둔다 — 각자 absolute로 따로 두면
-            겹치기 쉽다. */}
-        {(emoji || noted) && (
-          <span aria-hidden className="absolute right-1 top-0.5 flex items-center gap-0.5">
-            {emoji && <span className="text-sm leading-none">{emoji}</span>}
-            {noted && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
+        {/* 이모지는 날짜 숫자와 같은 줄, 같은 높이로 바로 옆에 붙인다 — 따로
+            구석에 떠 있으면 "이 날의 표시"라는 연결이 눈에 잘 안 들어온다. */}
+        <span className="flex items-center gap-1">
+          <span
+            className={`grid h-5 w-5 shrink-0 place-items-center rounded-full p-0 text-center text-xs font-medium leading-5 ${
+              isToday ? "bg-accent text-on-accent" : numberColorClass
+            }`}
+          >
+            {dayOfMonth}
           </span>
+          {emoji && (
+            <span aria-hidden className="text-sm leading-none">
+              {emoji}
+            </span>
+          )}
+        </span>
+        {children}
+        {noted && (
+          <span aria-hidden className="absolute right-1 top-0.5 h-1.5 w-1.5 rounded-full bg-accent" />
         )}
       </Link>
 

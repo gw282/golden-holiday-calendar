@@ -13,9 +13,11 @@ import { leaveSummaries } from "@/lib/leave";
 import { fxSnapshot } from "@/lib/fx";
 import {
   getReminderThresholds,
+  getWeekStart,
   isChatEnabled,
   isDesktopApp,
   isHourlyChimeEnabled,
+  getHourlyChimeAnchor,
   isStartTimeReminderEnabled,
   isOffline,
   isRecommendationEnabled,
@@ -55,6 +57,7 @@ import UpcomingMoreButton from "./components/UpcomingMoreButton";
 import BackupButton from "./components/BackupButton";
 import GoogleCalendarButton from "./components/GoogleCalendarButton";
 import SettingsPanel from "./components/SettingsPanel";
+import CalendarSettingsButton from "./components/CalendarSettingsButton";
 import HolidayFinderButton from "./components/HolidayFinderButton";
 import DDayButton from "./components/DDayButton";
 import DetailsOutsideClose from "./components/DetailsOutsideClose";
@@ -112,7 +115,8 @@ export default async function Home(props: PageProps<"/">) {
       ? { start: hlStart, end: hlEnd }
       : null;
 
-  const grid = await buildMonth(month);
+  const weekStart = await getWeekStart();
+  const grid = await buildMonth(month, weekStart);
 
   const coverage = await holidayCoverage();
   const horizonEnd = addDays(t, HORIZON_DAYS);
@@ -264,6 +268,7 @@ export default async function Home(props: PageProps<"/">) {
   // 알림 시점 선택은 설치본에서만 뜻이 있다 — 웹 배포본엔 이 알림 자체가 없다.
   const reminderThresholds = isDesktopApp() ? await getReminderThresholds() : [];
   const hourlyChime = isDesktopApp() ? await isHourlyChimeEnabled() : false;
+  const hourlyChimeAnchor = isDesktopApp() ? await getHourlyChimeAnchor() : "09:00";
   const startTimeReminder = isDesktopApp() ? await isStartTimeReminderEnabled() : false;
   // 자격 증명(.env.local)이 없으면 구글 단추는 눌러도 "설정하세요" 안내만 나온다.
   // 눌러도 아무것도 안 되는 단추를 화면에 두지 않는다 — 채워 넣으면 그때 나타난다.
@@ -386,6 +391,7 @@ export default async function Home(props: PageProps<"/">) {
           <HelpButton desktop={isDesktopApp()} />
           <FeatureGuideButton desktop={isDesktopApp()} />
           <DisplaySettingsButton />
+          <CalendarSettingsButton weekStart={weekStart} />
           {/* 온라인/오프라인 · 알림 시점을 한데 모은 팝업.
               헤더에 알약 단추를 하나씩 늘어놓지 않는다 */}
           <SettingsPanel
@@ -395,6 +401,7 @@ export default async function Home(props: PageProps<"/">) {
             reminderOptions={REMINDER_THRESHOLD_OPTIONS}
             reminderSelected={reminderThresholds}
             hourlyChime={hourlyChime}
+            hourlyChimeAnchor={hourlyChimeAnchor}
             startTimeReminder={startTimeReminder}
           />
         </div>
@@ -648,6 +655,7 @@ export default async function Home(props: PageProps<"/">) {
             month={grid}
             selected={selected}
             hrefFor={(d) => href({ month: monthOf(d), date: d })}
+            weekStart={weekStart}
             highlightRange={highlightRange}
             highlightKey={rawHighlight}
           />

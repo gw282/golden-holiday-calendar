@@ -1,4 +1,5 @@
 import { get, run } from "./db";
+import type { WeekStart } from "./date";
 
 /**
  * 앱 설정 — 지금은 **오프라인 모드** 하나뿐이다.
@@ -65,7 +66,7 @@ export async function setOffline(on: boolean): Promise<void> {
 }
 
 /**
- * 황금연휴 추천을 볼 것인가 — 기본은 켜짐. 연차 계획을 이미 다 세운 사람에게는
+ * 황금연휴를 볼 것인가 — 기본은 켜짐. 연차 계획을 이미 다 세운 사람에게는
  * 매번 계산해 보여주는 추천이 그냥 화면을 차지하는 것일 수 있어 끌 수 있게 둔다.
  * 꺼 두면 page.tsx가 계산 자체를 건너뛴다(감추기만 하는 게 아니라).
  */
@@ -118,6 +119,37 @@ export async function setReminderThresholds(minutes: number[]): Promise<void> {
   );
 }
 
+/** 일정 시작 시각에 즉시 알림을 보낼 것인가 — 기본 전역 설정은 켜짐 */
+export async function isStartTimeReminderEnabled(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'startTimeReminder'`,
+  );
+  return row ? row.value === "1" : true;
+}
+
+export async function setStartTimeReminderEnabled(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('startTimeReminder', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}
+
+export async function requestNotificationTest(): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('notificationTest', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [String(Date.now())],
+  );
+}
+
+export async function getNotificationTest(): Promise<string> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'notificationTest'`,
+  );
+  return row?.value ?? "";
+}
+
 /**
  * 정각마다 알림을 줄 것인가 — 기본은 꺼짐. 50분(창이 보이는 시간 기준) 스트레칭
  * 알림과는 별개다 — 그쪽은 "일한 지 얼마나 됐는지", 이쪽은 "지금 몇 시인지"를 알리는
@@ -135,5 +167,50 @@ export async function setHourlyChimeEnabled(on: boolean): Promise<void> {
     `INSERT INTO app_settings (key, value) VALUES ('hourlyChime', ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     [on ? "1" : "0"],
+  );
+}
+
+/**
+ * 정각 알림의 기준 시각 — "09:00"이면 09:00·10:00·11:00…마다 울린다.
+ * 원래는 **앱을 켠 시점부터 1시간마다**였는데, 그러면 언제 껐다 켰느냐에 따라
+ * 매번 다른 분(分)에 울려 예측할 수 없었다. 기준 시각의 "분"만 실제로 쓰인다
+ * (`run_notifier`가 매 시 그 분에 울리는지를 본다) — 시(時)는 그냥 기본값 표시용이다.
+ */
+export async function getHourlyChimeAnchor(): Promise<string> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'hourlyChimeAnchor'`,
+  );
+  return row?.value && /^([01]\d|2[0-3]):[0-5]\d$/.test(row.value) ? row.value : "09:00";
+}
+
+export async function setHourlyChimeAnchor(value: string): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('hourlyChimeAnchor', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [value],
+  );
+}
+
+/**
+ * 한 주가 월요일에 시작하는지 일요일에 시작하는지 — 기본은 월요일.
+ *
+ * `weekNum`·`zoom`·`theme`처럼 localStorage 첫 페인트 스크립트로 두지 **않은** 이유가
+ * 있다. 그 셋은 CSS 속성 하나만 바꾸는 순수 화면 취향이라 서버가 몰라도 된다.
+ * 이건 다르다 — `lib/calendar.ts`의 `buildMonth`가 주(week) 배열 자체를 이 값
+ * 기준으로 다시 짜고, 기간 일정 띠(band)의 칸 위치도 그 배열 순서로 계산한다.
+ * 서버가 값을 모르면 그릴 수 없는 값이라 DB에 둔다(`offline`과 같은 이유).
+ */
+export async function getWeekStart(): Promise<WeekStart> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'weekStart'`,
+  );
+  return row?.value === "sun" ? "sun" : "mon";
+}
+
+export async function setWeekStart(value: WeekStart): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('weekStart', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [value],
   );
 }

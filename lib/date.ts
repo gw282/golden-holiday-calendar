@@ -119,12 +119,17 @@ export function addMonths(m: MonthStr, n: number): MonthStr {
   return toDateStr(new Date(Date.UTC(y, mo - 1 + n, 1))).slice(0, 7);
 }
 
+/** 달력이 한 주를 어느 요일부터 그릴지 — 설정에서 고를 수 있다 (기본 월요일) */
+export type WeekStart = "mon" | "sun";
+
 /**
- * 그 날이 속한 주의 **월요일**.
- * 달력을 월요일 시작으로 그리기 때문이다. dayOfWeek는 0=일이라 월요일을 0으로 옮겨 계산한다.
+ * 그 날이 속한 주의 시작일. 기본은 **월요일**(달력을 그렇게 그리기 때문)이고,
+ * dayOfWeek는 0=일이라 월요일을 0으로 옮겨 계산한다. `weekStart`가 "sun"이면
+ * 그대로 dayOfWeek만큼 빼면 일요일이 나온다.
  */
-export function startOfWeek(s: DateStr): DateStr {
-  return addDays(s, -((dayOfWeek(s) + 6) % 7));
+export function startOfWeek(s: DateStr, weekStart: WeekStart = "mon"): DateStr {
+  const offset = weekStart === "sun" ? dayOfWeek(s) : (dayOfWeek(s) + 6) % 7;
+  return addDays(s, -offset);
 }
 
 /** '2026년 9월' */

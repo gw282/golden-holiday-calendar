@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { invoke } from "@tauri-apps/api/core";
+import TimePicker from "./TimePicker";
 
 /**
  * 헤더에 따로따로 있던 켜고/끄는 단추들(황금연휴 · 주차 표시 · 온라인/오프라인 ·
@@ -10,26 +11,14 @@ import { invoke } from "@tauri-apps/api/core";
  * 좁은 화면에서 줄바꿈이 잦고, 뭐가 기능 토글이고 뭐가 테마·확대 같은 화면 설정인지
  * 구분도 안 됐다 — 여기 모인 건 전부 **DB나 localStorage에 저장되는 기능 on/off**다.
  *
- * 각 항목의 저장 방식은 원래 있던 단추들(RecommendationToggle·WeekNumToggle·
- * OfflineToggle·ReminderSettings)과 똑같다 — 그 컴포넌트들의 로직을 그대로 옮겨 왔다.
- * 주차 표시만 `<html>` 속성 + localStorage(서버를 안 거친다)이고, 나머지 셋은
+ * 각 항목의 저장 방식은 원래 있던 단추들(RecommendationToggle·OfflineToggle·
+ * ReminderSettings)과 똑같다 — 그 컴포넌트들의 로직을 그대로 옮겨 왔다.
  * `/api/settings` PATCH 후 `router.refresh()`로 서버 컴포넌트를 다시 그린다.
+ * 주차 표시·절기 표시는 여기 없다 — `CalendarSettingsButton`으로 옮겼다
+ * (달력 화면 취향이라 알림 설정과 묶여 있을 이유가 없었다).
  */
 
-const WEEK_NUM_KEY = "weekNum";
-const WEEK_NUM_CHANGED = "weeknumchange";
 const PANEL_OPEN_EVENT = "mg-panel-open";
-
-function weekNumOn(): boolean {
-  return document.documentElement.dataset.weekNum !== "off";
-}
-function weekNumOnServer(): boolean {
-  return true;
-}
-function subscribeWeekNum(onChange: () => void) {
-  window.addEventListener(WEEK_NUM_CHANGED, onChange);
-  return () => window.removeEventListener(WEEK_NUM_CHANGED, onChange);
-}
 
 const REMINDER_LABELS: Record<number, string> = {
   15: "15분 전",
@@ -45,6 +34,7 @@ export default function SettingsPanel({
   reminderOptions,
   reminderSelected,
   hourlyChime,
+  hourlyChimeAnchor,
   startTimeReminder,
 }: {
   offline: boolean;
@@ -53,6 +43,7 @@ export default function SettingsPanel({
   reminderOptions: readonly number[];
   reminderSelected: number[];
   hourlyChime: boolean;
+  hourlyChimeAnchor: string;
   startTimeReminder: boolean;
 }) {
   const router = useRouter();
@@ -61,12 +52,9 @@ export default function SettingsPanel({
   const [, startTransition] = useTransition();
   const [checkedReminders, setCheckedReminders] = useState(new Set(reminderSelected));
   const [chime, setChime] = useState(hourlyChime);
+  const [chimeAnchor, setChimeAnchor] = useState(hourlyChimeAnchor);
   const [notifyError, setNotifyError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const weekNum = useSyncExternalStore(subscribeWeekNum, weekNumOn, weekNumOnServer);
-  // 주차 표시 로직은 유지하되 현재 설정 팝업에서는 노출하지 않는다.
-  void weekNum;
-  void applyWeekNum;
 
   useEffect(() => {
     if (!open) return;
@@ -91,26 +79,6 @@ export default function SettingsPanel({
     window.addEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
     return () => window.removeEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
   }, []);
-
-  function applyWeekNum(next: boolean) {
-    const root = document.documentElement;
-    if (next) {
-      delete root.dataset.weekNum;
-      try {
-        localStorage.removeItem(WEEK_NUM_KEY);
-      } catch {
-        // 무시 — 이번 세션 안에서는 그대로 적용된다
-      }
-    } else {
-      root.dataset.weekNum = "off";
-      try {
-        localStorage.setItem(WEEK_NUM_KEY, "off");
-      } catch {
-        // 무시
-      }
-    }
-    window.dispatchEvent(new Event(WEEK_NUM_CHANGED));
-  }
 
   async function patchSettings(body: Record<string, unknown>) {
     setBusy(true);
@@ -140,6 +108,11 @@ export default function SettingsPanel({
     const next = !chime;
     setChime(next);
     patchSettings({ hourlyChime: next });
+  }
+
+  function changeChimeAnchor(v: string) {
+    setChimeAnchor(v);
+    patchSettings({ hourlyChimeAnchor: v });
   }
 
   function toggleStartTimeReminder() {
@@ -174,7 +147,7 @@ export default function SettingsPanel({
         title="알림 설정"
         className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
       >
-        ⚙ 알림 설정
+        ⏰ 알림 설정
       </button>
 
       {open && (
@@ -251,19 +224,32 @@ export default function SettingsPanel({
                 </p>
               )}
 
-              <div className="flex items-center justify-between gap-2 border-t border-border pt-3">
-                <div>
-                  <h3 className="text-xs font-semibold text-foreground">휴식 알림</h3>
-                  <p className="mt-1 text-[10px] text-muted">앱을 켠 뒤 1시간 간격으로 알려 줍니다.</p>
+              <div className="border-t border-border pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-semibold text-foreground">휴식 알림</h3>
+                    <p className="mt-1 text-[10px] text-muted">고른 시각부터 매시 정각에 알려 줍니다.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={chime}
+                    disabled={busy}
+                    onChange={toggleChime}
+                    className="h-3.5 w-3.5 shrink-0 accent-accent"
+                    aria-label="휴식 알림 (1시간 간격)"
+                  />
                 </div>
-                <input
-                  type="checkbox"
-                  checked={chime}
-                  disabled={busy}
-                  onChange={toggleChime}
-                  className="h-3.5 w-3.5 shrink-0 accent-accent"
-                  aria-label="휴식 알림 (1시간 간격)"
-                />
+                {chime && (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-muted">시작 시각</span>
+                    <TimePicker
+                      value={chimeAnchor}
+                      onChange={changeChimeAnchor}
+                      disabled={busy}
+                      ariaLabel="휴식 알림 시작 시각"
+                    />
+                  </div>
+                )}
               </div>
 
               <button

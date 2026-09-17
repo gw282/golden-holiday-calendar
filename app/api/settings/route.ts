@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import {
   getReminderThresholds,
+  getNotificationTest,
+  getWeekStart,
+  getHourlyChimeAnchor,
+  isStartTimeReminderEnabled,
   isHourlyChimeEnabled,
   isOffline,
   isRecommendationEnabled,
   REMINDER_THRESHOLD_OPTIONS,
   setHourlyChimeEnabled,
+  setHourlyChimeAnchor,
   setOffline,
   setReminderThresholds,
+  setStartTimeReminderEnabled,
   setRecommendationEnabled,
+  setWeekStart,
+  requestNotificationTest,
 } from "@/lib/settings";
 
 /**
@@ -23,7 +31,11 @@ export async function GET() {
     offline: await isOffline(),
     recommendations: await isRecommendationEnabled(),
     reminderThresholds: await getReminderThresholds(),
+    startTimeReminder: await isStartTimeReminderEnabled(),
+    notificationTest: await getNotificationTest(),
     hourlyChime: await isHourlyChimeEnabled(),
+    hourlyChimeAnchor: await getHourlyChimeAnchor(),
+    weekStart: await getWeekStart(),
   });
 }
 
@@ -32,7 +44,11 @@ export async function PATCH(request: Request) {
     offline?: unknown;
     recommendations?: unknown;
     reminderThresholds?: unknown;
+    startTimeReminder?: unknown;
+    notificationTest?: unknown;
     hourlyChime?: unknown;
+    hourlyChimeAnchor?: unknown;
+    weekStart?: unknown;
   };
 
   if (body.offline !== undefined) {
@@ -69,10 +85,42 @@ export async function PATCH(request: Request) {
     await setHourlyChimeEnabled(body.hourlyChime);
   }
 
+  if (body.hourlyChimeAnchor !== undefined) {
+    if (typeof body.hourlyChimeAnchor !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(body.hourlyChimeAnchor)) {
+      return NextResponse.json({ error: "hourlyChimeAnchor는 HH:MM 형식이어야 합니다." }, { status: 400 });
+    }
+    await setHourlyChimeAnchor(body.hourlyChimeAnchor);
+  }
+
+  if (body.startTimeReminder !== undefined) {
+    if (typeof body.startTimeReminder !== "boolean") {
+      return NextResponse.json({ error: "startTimeReminder는 true/false여야 합니다." }, { status: 400 });
+    }
+    await setStartTimeReminderEnabled(body.startTimeReminder);
+  }
+
+  if (body.notificationTest !== undefined) {
+    if (body.notificationTest !== true) {
+      return NextResponse.json({ error: "notificationTest는 true여야 합니다." }, { status: 400 });
+    }
+    await requestNotificationTest();
+  }
+
+  if (body.weekStart !== undefined) {
+    if (body.weekStart !== "mon" && body.weekStart !== "sun") {
+      return NextResponse.json({ error: "weekStart는 mon/sun 중 하나여야 합니다." }, { status: 400 });
+    }
+    await setWeekStart(body.weekStart);
+  }
+
   return NextResponse.json({
     offline: await isOffline(),
     recommendations: await isRecommendationEnabled(),
     reminderThresholds: await getReminderThresholds(),
+    startTimeReminder: await isStartTimeReminderEnabled(),
+    notificationTest: await getNotificationTest(),
     hourlyChime: await isHourlyChimeEnabled(),
+    hourlyChimeAnchor: await getHourlyChimeAnchor(),
+    weekStart: await getWeekStart(),
   });
 }

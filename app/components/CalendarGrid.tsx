@@ -1,13 +1,24 @@
 import Link from "next/link";
 import type { CalendarDay, CalendarMonth } from "@/lib/calendar";
 import type { Event } from "@/lib/events";
-import { isoWeekNumber, type DateStr } from "@/lib/date";
+import { isoWeekNumber, type DateStr, type WeekStart } from "@/lib/date";
 import { colorFg, colorHex } from "@/lib/eventColors";
 import DayCellInteractive from "./DayCellInteractive";
 import EventPreviewChip from "./EventPreviewChip";
 
-/** 월요일 시작. 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다 */
-const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+/** 0=일 … 6=토 요일 이름. 헤더는 이 인덱스로 색을 정하지, 화면 위치로 정하지 않는다 —
+    주 시작 요일이 바뀌어도 "일요일은 빨강" 규칙 자체는 그대로여야 하기 때문이다 */
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+/**
+ * 헤더에 보여줄 요일 순서(0=일…6=토 인덱스 배열).
+ * 월요일 시작이 기본인 이유: 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다.
+ * 일요일 시작으로 바꾸면 그 대신 익숙한 배치가 되지만, 토요일과 다음 주 일요일이
+ * 줄 경계에서 갈라진다 — 사용자가 고른 트레이드오프라 그대로 따른다.
+ */
+function weekdayOrder(weekStart: WeekStart): number[] {
+  return weekStart === "sun" ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
+}
 
 /** 띠 한 줄의 높이(px). 칸 아래에 이만큼씩 자리를 비워 둔다 */
 const BAND_HEIGHT = 18;
@@ -34,12 +45,15 @@ export default function CalendarGrid({
   month,
   selected,
   hrefFor,
+  weekStart = "mon",
   highlightRange,
   highlightKey = "",
 }: {
   month: CalendarMonth;
   selected: DateStr;
   hrefFor: (date: DateStr) => string;
+  /** month.weeks가 이미 이 기준으로 짜여 있다 — 헤더 요일 순서를 맞추는 데만 쓴다 */
+  weekStart?: WeekStart;
   /** 추천에서 넘어온 연휴 구간 — 그 날들이 잠깐 깜빡인다 */
   highlightRange?: Range | null;
   /** 이 값이 바뀌면 셀을 새로 마운트해 애니메이션을 다시 태운다 */
@@ -56,14 +70,14 @@ export default function CalendarGrid({
           className="week-num shrink-0 border-r border-border"
         />
         <div className="grid flex-1 grid-cols-7">
-          {WEEKDAYS.map((w, i) => (
+          {weekdayOrder(weekStart).map((wd) => (
             <div
-              key={w}
+              key={wd}
               className={`py-2 text-center text-xs font-medium ${
-                i === 6 ? "text-holiday" : i === 5 ? "text-saturday" : "text-muted"
+                wd === 0 ? "text-holiday" : wd === 6 ? "text-saturday" : "text-muted"
               }`}
             >
-              {w}
+              {WEEKDAY_KO[wd]}
             </div>
           ))}
         </div>
@@ -234,6 +248,9 @@ function Cell({
       date={day.date}
       href={href}
       selected={selected}
+      dayOfMonth={day.dayOfMonth}
+      isToday={day.isToday}
+      numberColorClass={numberColor}
       style={{ paddingBottom: `${reservedPx + 6}px` }}
       className={`flex min-h-[84px] flex-col gap-0.5 border-r border-border p-1.5 text-left transition-colors [&:nth-child(7n)]:border-r-0 hover:bg-accent-soft/60 ${
         bottomBorder ? "border-b" : ""
@@ -241,16 +258,17 @@ function Cell({
         flash ? "flash-day" : ""
       }`}
     >
-      <span
-        className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center self-start rounded-full px-1 text-xs font-medium ${
-          day.isToday ? "bg-accent text-on-accent" : numberColor
-        }`}
-      >
-        {day.dayOfMonth}
-      </span>
-
       {day.holiday && (
         <span className="truncate text-[10px] leading-tight text-holiday">{day.holiday.name}</span>
+      )}
+
+      {/* 기본은 꺼짐 — globals.css가 data-solar-term="on"일 때만 보이게 한다.
+          항상 그려 두는 이유는 weekNum과 같다: 서버는 계산만 하고, 보이기/숨기기는
+          CSS 하나로 끝내 서버 재요청 없이 즉시 토글되게 하려는 것이다. */}
+      {day.solarTerm && (
+        <span className="solar-term truncate text-[10px] leading-tight text-solar-term">
+          {day.solarTerm}
+        </span>
       )}
 
       {/* DB 이벤트가 아니라 순수 표시용이라 색은 이 자리에서만 hex로 직접 준다.

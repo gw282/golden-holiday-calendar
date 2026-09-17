@@ -115,13 +115,8 @@ export default function TodoList() {
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">오늘 할 일</h2>
-          <button
-            type="button"
-            onClick={openWidget}
-            className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted hover:border-accent hover:text-accent"
-          >
-            바탕화면에 띄우기
-          </button>
+          {/* ponytail: 위젯 창이 Windows에서 투명 배경 없이 흰 화면으로만 뜨는 문제가
+              안 풀려서 버튼을 일단 뺀다 — WebView2 투명 처리 원인 찾으면 되살릴 것 */}
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted">

@@ -78,6 +78,10 @@ fn open_todo_widget(app: tauri::AppHandle) -> Result<(), String> {
     .inner_size(320.0, 360.0)
     .min_inner_size(260.0, 180.0)
     .transparent(true)
+    // `.transparent(true)`만으로는 부족하다 — WebView2 자체의 기본 배경이
+    // **불투명 흰색**이라, 알파를 0으로 명시하지 않으면 창 레벨 투명 설정과
+    // 상관없이 흰 화면만 보인다(페이지 CSS가 뭐든 그 위에 흰 배경이 먼저 깔린다).
+    .background_color(tauri::webview::Color(0, 0, 0, 0))
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
@@ -100,6 +104,15 @@ fn open_todo_widget(app: tauri::AppHandle) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 반드시 다른 플러그인·setup보다 **앞**에 등록해야 한다 — 두 번째 인스턴스를
+        // 여기서 가로채지 못하면 그 뒤로 등록된 것들(트레이·알림 스레드 등)이
+        // 그대로 두 벌 생겨 버린다.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         // `--hidden` 인자로 켜면(자동 실행 시) 트레이에만 조용히 자리잡는다.
@@ -494,6 +507,8 @@ struct SettingsResponse {
     reminder_thresholds: Vec<i64>,
     #[serde(rename = "hourlyChime", default)]
     hourly_chime: bool,
+    #[serde(rename = "hourlyChimeAnchor", default = "default_hourly_chime_anchor")]
+    hourly_chime_anchor: String,
     #[serde(rename = "startTimeReminder", default = "default_start_time_reminder")]
     start_time_reminder: bool,
     #[serde(rename = "notificationTest", default)]
@@ -502,6 +517,20 @@ struct SettingsResponse {
 
 fn default_start_time_reminder() -> bool {
     true
+}
+
+fn default_hourly_chime_anchor() -> String {
+    "09:00".to_string()
+}
+
+/// "HH:MM"에서 분(0~59)만 뽑는다. 못 읽으면 0분(정각)으로 — 안전한 기본값이다
+fn anchor_minute(anchor: &str) -> u32 {
+    anchor
+        .split(':')
+        .nth(1)
+        .and_then(|m| m.parse().ok())
+        .filter(|m| *m < 60)
+        .unwrap_or(0)
 }
 
 /// 화면의 '알림 시점'·'시작시간 알림'·'1시간 간격 알림' 체크박스가 저장한 값을 그대로 읽어 온다.
@@ -533,11 +562,13 @@ fn run_notifier(app: &tauri::AppHandle) {
     let mut notified: HashSet<(i64, i64)> = HashSet::new();
     let mut notified_date = String::new();
     let mut last_notification_test = String::new();
-    // 스트레칭 알림 기준 — 앱을 켠 시점(이 스레드가 시작된 시점)부터 흐른 시간.
-    // 정각(예: 3시 정각)에 맞추는 게 아니라 실행 후 60분마다다. 한때 "창이 보이는
-    // 시간만" 세는 50분짜리 알림을 따로 뒀는데, 알림이 두 종류로 나뉘어 헷갈리기만
-    // 해서 하나(이 1시간짜리, 설정에서 켜고 끌 수 있다)로 합쳤다.
-    let mut last_chime = std::time::Instant::now();
+    // 스트레칭 알림을 언제 마지막으로 울렸는지 "날짜-시" 단위로 기억한다
+    // (예: "2026-09-17-14"). 한때 **앱을 켠 시점부터** 60분마다 울렸는데, 그러면
+    // 언제 껐다 켰느냐에 따라 매번 다른 분(分)에 울려 예측할 수 없었다 — 이제는
+    // 사용자가 고른 기준 시각의 "분"에 맞춰, 매 시 그 분마다 울린다(설정에서
+    // 켜고 끄고 기준 시각을 고를 수 있다). 30초마다 도는 폴링 루프 안에서 같은
+    // 시(時)에 두 번 울리지 않도록 이 키로 막는다.
+    let mut last_chime_hour = String::new();
 
     loop {
         thread::sleep(POLL_INTERVAL);
@@ -613,17 +644,21 @@ fn run_notifier(app: &tauri::AppHandle) {
             }
         }
 
-        // 꺼져 있는 동안에도 시간은 그대로 흘러서, 나중에 켜면 그 자리에서 바로
-        // 한 번 울릴 수 있다 — 그것도 무해하다.
-        if settings.hourly_chime && last_chime.elapsed() >= Duration::from_secs(3600) {
+        let now = Local::now();
+        let this_hour_key = now.format("%Y-%m-%d-%H").to_string();
+        if settings.hourly_chime
+            && now.format("%M").to_string().parse::<u32>().unwrap_or(0)
+                == anchor_minute(&settings.hourly_chime_anchor)
+            && last_chime_hour != this_hour_key
+        {
             let (title, body) = random_hourly_phrase();
             let _ = app
                 .notification()
                 .builder()
                 .title(title)
-                .body(format!("{body} (현재 {})", Local::now().format("%H:%M")))
+                .body(format!("{body} (현재 {})", now.format("%H:%M")))
                 .show();
-            last_chime = std::time::Instant::now();
+            last_chime_hour = this_hour_key;
         }
     }
 }

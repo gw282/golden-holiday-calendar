@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import BirdsBackground from "./components/BirdsBackground";
 
 export const metadata: Metadata = {
   title: "MG 매니지",
@@ -20,8 +21,11 @@ const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="light"||t=
  */
 const ZOOM_SCRIPT = `try{var z=localStorage.getItem("zoom");if(["50","75","125","150","175","200"].indexOf(z)>=0)document.documentElement.style.zoom=z+"%"}catch(e){}`;
 
-/** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. SettingsPanel과 같은 "weekNum" 키다 */
+/** 주차 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. CalendarSettingsButton과 같은 "weekNum" 키다 */
 const WEEK_NUM_SCRIPT = `try{if(localStorage.getItem("weekNum")==="off")document.documentElement.dataset.weekNum="off"}catch(e){}`;
+
+/** 절기 표시 on/off도 같은 이유로 첫 페인트 전에 붙인다. 기본은 꺼짐이라 "on"일 때만 켠다 */
+const SOLAR_TERM_SCRIPT = `try{if(localStorage.getItem("solarTerm")==="on")document.documentElement.dataset.solarTerm="on"}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
@@ -31,6 +35,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: ZOOM_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: WEEK_NUM_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SOLAR_TERM_SCRIPT }} />
+        <BirdsBackground />
         {children}
       </body>
     </html>

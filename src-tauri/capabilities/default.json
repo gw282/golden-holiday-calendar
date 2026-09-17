@@ -1,8 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default desktop permissions",
+  "description": "Default desktop permissions. remote.urls는 배포본이 사이드카(127.0.0.1:3210)를 WebviewUrl::External로 여는 탓에 필요하다 — Tauri 기준 frontendDist/tauri://가 아닌 출처는 'remote'로 잡혀, 이게 없으면 permissions 전체가 적용 안 되고 모든 커맨드가 'not allowed by ACL'로 막힌다. dev(devUrl=localhost:3000)는 이미 local로 잡혀 영향이 없다 — dev로만 검증하면 이 문제가 안 보이는 이유다.",
   "windows": ["main", "todo-widget"],
+  "remote": {
+    "urls": ["http://127.0.0.1:3210/*"]
+  },
   "permissions": [
     "core:default",
     "autostart:default",

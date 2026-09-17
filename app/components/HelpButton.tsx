@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toggleBirdsBg } from "./birdsBg";
 
 const PANEL_OPEN_EVENT = "mg-panel-open";
+/** 이 이상 누르고 있으면 클릭이 아니라 "꾹 누르기"로 친다 */
+const LONG_PRESS_MS = 800;
 
 /**
  * 화면 전체 도움말.
@@ -14,6 +17,10 @@ const PANEL_OPEN_EVENT = "mg-panel-open";
 export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 꾹 누르기가 발동했는지 — click은 pointerup 뒤에 항상 한 번 더 오므로,
+  // 이걸로 "이번 클릭은 도움말을 열지 말라"고 막는다.
+  const longPressed = useRef(false);
 
   useEffect(() => {
     if (!dialog.current) return;
@@ -29,17 +36,49 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
     return () => window.removeEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
   }, []);
 
+  useEffect(() => () => clearPressTimer(), []);
+
   function toggleHelp() {
     const next = !open;
     if (next) window.dispatchEvent(new CustomEvent(PANEL_OPEN_EVENT, { detail: "help" }));
     setOpen(next);
   }
 
+  function clearPressTimer() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function startPress() {
+    longPressed.current = false;
+    clearPressTimer();
+    pressTimer.current = setTimeout(() => {
+      longPressed.current = true;
+      toggleBirdsBg();
+    }, LONG_PRESS_MS);
+  }
+
+  function handleClick() {
+    // 꾹 눌러서 이미 발동했으면 이 클릭은 도움말을 열지 않는다 — 한 번 누른 동작이
+    // 두 가지 결과(배경 토글 + 도움말 열기)를 동시에 내면 안 된다
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    toggleHelp();
+  }
+
   return (
     <>
       <button
         type="button"
-        onClick={toggleHelp}
+        onClick={handleClick}
+        onPointerDown={startPress}
+        onPointerUp={clearPressTimer}
+        onPointerLeave={clearPressTimer}
+        onPointerCancel={clearPressTimer}
         aria-label="도움말"
         title="도움말"
         // 제목 옆에 붙어서 글자 크기에 따라 찌그러지지 않도록 정원(h=w)으로 고정한다

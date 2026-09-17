@@ -2,6 +2,7 @@ import { all, get } from "./db";
 import { isMultiDay, listEventsBetween, type Event } from "./events";
 import type { Holiday } from "./holidays";
 import { milestonesInRange, type Milestone } from "./milestones";
+import { solarTermsInRange } from "./solarTerms";
 import {
   addDays,
   addMonths,
@@ -13,6 +14,7 @@ import {
   today,
   type DateStr,
   type MonthStr,
+  type WeekStart,
 } from "./date";
 
 /**
@@ -57,6 +59,8 @@ export type CalendarDay = {
   holiday: Holiday | null;
   /** 사내 고정 마일스톤(급여일 등) — DB 이벤트가 아니라 순수 표시 전용이다 */
   milestone: Milestone | null;
+  /** 24절기 이름. 태양 기준이라 매년 계산한다(`solarTerms.ts`) — 표시 전용, DB 미참조 */
+  solarTerm: string | null;
   events: Event[];
 };
 
@@ -64,7 +68,7 @@ export type CalendarMonth = {
   month: MonthStr;
   prevMonth: MonthStr;
   nextMonth: MonthStr;
-  /** 일요일 시작, 7일씩 4~6줄 */
+  /** weekStart 설정에 따라 월요일 또는 일요일 시작, 7일씩 4~6줄 */
   weeks: CalendarDay[][];
   /**
    * 여러 날에 걸친 일정. 칸마다 같은 제목을 반복해 넣지 않고 가로 띠로 그린다.
@@ -74,14 +78,18 @@ export type CalendarMonth = {
 };
 
 /** 한 달 그리드를 만든다. 일정·공휴일을 그리드 전체 범위로 한 번에 읽는다. */
-export async function buildMonth(month: MonthStr): Promise<CalendarMonth> {
+export async function buildMonth(
+  month: MonthStr,
+  weekStart: WeekStart = "mon",
+): Promise<CalendarMonth> {
   const first = monthStart(month);
   const last = monthEnd(month);
-  const gridStart = startOfWeek(first);
-  const gridEnd = addDays(startOfWeek(last), 6);
+  const gridStart = startOfWeek(first, weekStart);
+  const gridEnd = addDays(startOfWeek(last, weekStart), 6);
 
   const holidays = await holidayMap(gridStart, gridEnd);
   const milestones = milestonesInRange(gridStart, gridEnd, new Set(holidays.keys()));
+  const solarTerms = solarTermsInRange(gridStart, gridEnd);
 
   const byDate = new Map<DateStr, Event[]>();
   const spanning: Event[] = [];
@@ -111,6 +119,7 @@ export async function buildMonth(month: MonthStr): Promise<CalendarMonth> {
         weekday: dayOfWeek(cursor),
         holiday: holidays.get(cursor) ?? null,
         milestone: milestones.get(cursor) ?? null,
+        solarTerm: solarTerms.get(cursor) ?? null,
         events: byDate.get(cursor) ?? [],
       });
       cursor = addDays(cursor, 1);

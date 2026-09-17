@@ -27,12 +27,14 @@
   /* 같은 이유로 라이트를 한 단계 진하게 (#dc2626은 쉬는 날 칸에서 4.46) */
   --holiday: light-dark(#d11f1f, #f87171);
   --saturday: light-dark(#2563eb, #7ba7ff);
+  /* 24절기 표시색. 공휴일(빨강)·토요일(파랑)과 안 겹치게 청록 계열로 뒀다 */
+  --solar-term: light-dark(#0d9488, #2dd4bf);
   --leave: light-dark(#b45309, #fbbf24);
   --leave-soft: light-dark(#fef3c7, #3a2f12);
   /* 쉬는 날(주말 + 공휴일) 칸 배경. 읽어야 할 것은 일정이지 배경이 아니라서 과하게
      칠하진 않지만, 라이트에서 #f4f6f9는 surface(#ffffff)와 거의 안 갈려서 '쉬는 날
      덩어리'가 잘 안 보인다는 지적을 받아 한 단계 더 진하게 했다 */
-  --rest: light-dark(#e9edf4, #1b1f26);
+  --rest: light-dark(#e9edf4, #252c37);
   /* 위에 떠 있는 판(툴팁·드롭다운) 배경.
      라이트에서는 그림자가 판을 띄워 주지만 **다크에서는 검은 그림자가 검은 배경에 묻혀
      보이지 않는다.** 그래서 다크에서는 surface보다 한 단계 밝게 만들어 밝기로 띄운다.
@@ -60,6 +62,7 @@
   --color-on-accent: var(--on-accent);
   --color-holiday: var(--holiday);
   --color-saturday: var(--saturday);
+  --color-solar-term: var(--solar-term);
   --color-leave: var(--leave);
   --color-leave-soft: var(--leave-soft);
   --color-rest: var(--rest);
@@ -74,8 +77,7 @@ body {
     system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-/* 추천 연차일을 달력에서 잠깐 깜빡여 어디인지 알려 준다.
-   3번 깜빡인 뒤에는 테두리만 남겨서 계속 눈에 띄되 거슬리지는 않게 한다. */
+/* 추천 연차일을 달력에서 세 번 깜빡여 어디인지 알려 준 뒤 사라지게 한다. */
 @keyframes flash-day {
   0%,
   100% {
@@ -89,8 +91,6 @@ body {
 }
 
 .flash-day {
-  /* 깜빡인 뒤에도 어디였는지 남도록 테두리를 유지한다 */
-  box-shadow: inset 0 0 0 2px var(--leave);
   animation: flash-day 800ms ease-in-out 3;
 }
 
@@ -100,51 +100,16 @@ body {
   }
 }
 
-/* 주차 표시는 취향이라 끌 수 있다. 설정 팝업(SettingsPanel)이 <html>에
+/* 주차 표시는 취향이라 끌 수 있다. 설정 팝업(CalendarSettingsButton)이 <html>에
    data-week-num을 붙였다 뗀다 — ThemeToggle과 같은 방식(진짜 상태는 속성 하나,
    React state로 복제하지 않는다) */
 html[data-week-num="off"] .week-num {
   display: none;
 }
 
-/*
- * MG쉬지 모드 — 업무 화면(.normal-mode)과 힐링 화면(.rest-mode)을 바꿔 끼운다.
- * 둘 다 서버가 이미 그려서 내려보낸 채로 있고, 여기서 보일지만 정한다
- * (SettingsPanel.tsx의 "MG쉬지 모드" 체크박스가 <html data-mg-sheoji>를 붙였다 뗀다).
- * display:none은 opacity 트랜지션을 못 타므로, 새로 나타나는 쪽에 짧은
- * fade-in 애니메이션을 걸어 "부드러운 전환" 요구를 채운다.
- */
-.rest-mode {
+/* 절기 표시는 기본이 꺼짐이다(공휴일보다 훨씬 자주 나와 칸이 붐빈다) — 그래서
+   위 주차 표시와 반대로 "on"일 때만 보인다. CalendarGrid는 항상 그려 두고
+   여기서 보이기/숨기기만 한다 */
+html:not([data-solar-term="on"]) .solar-term {
   display: none;
-}
-html[data-mg-sheoji="on"] .normal-mode {
-  display: none;
-}
-html[data-mg-sheoji="on"] .rest-mode {
-  display: block;
-  animation: mg-sheoji-fade-in 420ms ease-out;
-}
-@keyframes mg-sheoji-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  html[data-mg-sheoji="on"] .rest-mode {
-    animation: none;
-  }
-}
-
-/* 켜지면 화면 분위기가 살짝 따뜻해진다 — 업무용 파랑 accent 대신 휴식을 뜻하는
-   호박색을 쓰고, 배경도 한 단계 데운다. 나머지 토큰(--leave 등)은 그대로 둔다 —
-   전부 바꾸면 "새 테마"가 되어 버려 오히려 이게 같은 앱이라는 감각이 사라진다. */
-html[data-mg-sheoji="on"] {
-  --background: light-dark(#fbf3e7, #1c1712);
-  --accent: light-dark(#c2760f, #f0b45a);
-  --accent-soft: light-dark(#f6e6c8, #3a2c14);
 }
