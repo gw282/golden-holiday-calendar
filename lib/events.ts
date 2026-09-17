@@ -224,17 +224,19 @@ function normalizeColor(v: unknown): string {
 }
 
 /**
- * 비어 있으면 null(= 전역 알림 설정을 따름). 0이면 이 일정만 알림을 아예 끈 것 —
+ * 비어 있으면 null(= 전역 알림 설정을 따름). -1이면 이 일정은 시작 시 알림만 —
+ * 0이면 이 일정만 알림을 아예 끈 것 —
  * 전역 설정과 무관하게 이 일정에는 알림을 보내지 않는다. 그 외엔 정해진
  * 선택지(15/30/60/120분)만 받는다.
  */
 function normalizeReminderMinutes(v: unknown): number | null {
   if (v === undefined || v === null) return null;
   const n = Number(v);
+  if (n === -1) return -1;
   if (n === 0) return 0;
   const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
   if (!options.includes(n)) {
-    throw new ValidationError(`알림 시점은 0(끄기) 또는 ${REMINDER_THRESHOLD_OPTIONS.join("/")}분 전 중 하나여야 합니다.`);
+    throw new ValidationError(`알림 시점은 -1(시작 시), 0(끄기) 또는 ${REMINDER_THRESHOLD_OPTIONS.join("/")}분 전 중 하나여야 합니다.`);
   }
   return n;
 }

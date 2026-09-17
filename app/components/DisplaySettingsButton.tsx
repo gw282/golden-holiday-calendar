@@ -24,6 +24,9 @@ function subscribeZoom(onChange: () => void) {
 }
 function applyZoom(next: Zoom) {
   document.documentElement.style.zoom = next === 100 ? "" : `${next}%`;
+  // vh 단위는 zoom의 영향을 안 받아서, vh로 잡은 팝업 최대 높이가 확대 배율만큼
+  // 화면 밖으로 넘친다 — 그 팝업들이 이 값으로 나눠 보정한다 (FeatureGuideButton 등).
+  document.documentElement.style.setProperty("--app-zoom", String(next / 100));
   try {
     if (next === 100) localStorage.removeItem(ZOOM_KEY);
     else localStorage.setItem(ZOOM_KEY, String(next));

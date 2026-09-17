@@ -28,12 +28,28 @@ export default function Shortcuts({
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      // 조합키는 브라우저 몫이다
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-
       // 팝업(<dialog>)이 열려 있으면 손대지 않는다.
       // ESC로 닫는 것은 showModal()의 기본 동작이라 여기서 또 처리하면 두 번 닫힌다.
       if (document.querySelector("dialog[open]")) return;
+
+      // 글을 쓰는 중이면 끼어들지 않는다
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLElement &&
+        (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+
+      if (e.ctrlKey && e.key.toLowerCase() === "f") {
+        if (typing) return;
+        const input = document.getElementById(SEARCH_INPUT_ID);
+        if (!(input instanceof HTMLInputElement)) return;
+        input.focus();
+        input.select();
+        e.preventDefault();
+        return;
+      }
+
+      // 나머지 조합키는 브라우저 몫이다
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       // 연도 브리핑은 <dialog>가 아니라 <details>라 ESC가 안 먹는다. 그것만 여기서 닫아 준다.
       // 입력 중인지 따지지 않는 이유: 펼친 것을 닫는 건 글을 쓰다가도 하고 싶은 일이다.
@@ -45,11 +61,6 @@ export default function Shortcuts({
         return;
       }
 
-      // 글을 쓰는 중이면 끼어들지 않는다
-      const el = document.activeElement;
-      const typing =
-        el instanceof HTMLElement &&
-        (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
       if (typing) return;
 
       switch (e.key) {

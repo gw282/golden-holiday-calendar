@@ -2,9 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { PreviewItem, PreviewResult } from "@/lib/importIcs";
 import type { RepeatFreq } from "@/lib/events";
 import DatePicker from "./DatePicker";
+import { isTauriRuntime } from "./isTauri";
 
 /**
  * `.ics` 백업 — 내보내기 / 가져오기.
@@ -13,7 +16,7 @@ import DatePicker from "./DatePicker";
  * 들어갔는데, 무엇이 들어올지 볼 수도 되돌릴 수도 없었다. 실제로 구글 캘린더를 넣어 보니
  * 공휴일이 두 벌 찍히고, 하루 종일 일정이 연차 추천을 조용히 막았다.
  *
- * 내보내기는 `<a download>`로 끝난다 — fetch로 받아 Blob을 만들 이유가 없다.
+ * 설치본에서는 저장 위치를 고르게 하고, 웹에서는 브라우저 다운로드를 사용한다.
  */
 
 type Choice = { skip: boolean; freq: RepeatFreq | ""; count: string };
@@ -35,6 +38,41 @@ export default function BackupButton() {
   // (구글 캘린더 내보내기가 특히 그렇다) 필요한 구간만 골라 보게 한다.
   const [rangeFrom, setRangeFrom] = useState("");
   const [rangeTo, setRangeTo] = useState("");
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function exportIcs() {
+    if (!isTauriRuntime()) {
+      const link = document.createElement("a");
+      link.href = "/api/ics";
+      link.download = "";
+      link.click();
+      return;
+    }
+
+    setBusy(true);
+    setExportMessage(null);
+    setExportError(null);
+    try {
+      const suggested = `mg-manage-${new Date().toISOString().slice(0, 10)}.ics`;
+      const [response, path] = await Promise.all([
+        fetch("/api/ics", { cache: "no-store" }),
+        save({
+          defaultPath: suggested,
+          filters: [{ name: "iCalendar 파일", extensions: ["ics"] }],
+        }),
+      ]);
+      if (!response.ok) throw new Error("내보내기 파일을 만들지 못했습니다.");
+      if (!path) return;
+      const contents = await response.text();
+      await invoke("save_ics_file", { path, contents });
+      setExportMessage(`저장했습니다: ${path}`);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "내보내기에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function openPreview(file: File) {
     setBusy(true);
@@ -150,13 +188,18 @@ export default function BackupButton() {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="text-[11px] text-muted">데이터</span>
 
-      <a
-        href="/api/ics"
-        download
+      <button
+        type="button"
+        onClick={exportIcs}
+        disabled={busy || pending}
         className="text-[11px] text-muted underline decoration-dotted hover:text-accent"
       >
         내보내기 (.ics)
-      </a>
+      </button>
+      {exportError && <span className="text-[10px] text-red-500">{exportError}</span>}
+      {!exportError && exportMessage && (
+        <span className="text-[10px] text-muted">{exportMessage}</span>
+      )}
 
       <button
         type="button"
@@ -295,7 +338,7 @@ export default function BackupButton() {
               연휴 추천에서 빠집니다.
             </p>
 
-            <ul className="max-h-[46vh] divide-y divide-border overflow-y-auto">
+            <ul className="max-h-[calc(46vh/var(--app-zoom,1))] divide-y divide-border overflow-y-auto">
               {visibleItems.map((item) => (
                 <Row
                   key={item.index}

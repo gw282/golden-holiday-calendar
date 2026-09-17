@@ -45,7 +45,7 @@ export default function FeatureGuideButton({ desktop = false }: { desktop?: bool
         onClick={(event) => {
           if (event.target === dialog.current) dialog.current?.close();
         }}
-        className="m-auto hidden max-h-[85vh] w-[min(34rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg open:flex backdrop:bg-black/40"
+        className="m-auto hidden max-h-[calc(85vh/var(--app-zoom,1))] w-[min(34rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg open:flex backdrop:bg-black/40"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div>

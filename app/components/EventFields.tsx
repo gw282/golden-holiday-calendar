@@ -6,6 +6,7 @@ import { countWorkdays, fmtDays, useHolidayDates, type LeaveTypeOption } from ".
 import Hint from "./Hint";
 import DatePicker from "./DatePicker";
 import TimePicker from "./TimePicker";
+import { isTauriRuntime } from "./isTauri";
 
 /** 추가 폼과 수정 폼이 같은 입력을 쓰도록 모아 둔 것. 제출은 각자 한다. */
 export type EventFieldValues = {
@@ -35,12 +36,13 @@ export type EventFieldValues = {
   leaveTypeId: string;
   /** 자동 계산과 다르게 낼 때만 채운다 (반차 0.5 · 반반차 0.25). 비우면 자동 */
   leaveDays: string;
-  /** "" = 전역 알림 설정을 따름, "0" = 이 일정만 알림 끄기, 그 외엔 분(15/30/60/120) */
+  /** "" = 전역 알림 설정을 따름, "-1" = 시작 시, "0" = 이 일정만 알림 끄기, 그 외엔 분(15/30/60/120) */
   reminderMinutes: string;
 };
 
 const REMINDER_OPTIONS = [
-  { value: "", label: "기본(전역 설정)" },
+  { value: "", label: "기본 알림 설정" },
+  { value: "-1", label: "시작 시 알림" },
   { value: "15", label: "15분 전" },
   { value: "30", label: "30분 전" },
   { value: "60", label: "1시간 전" },
@@ -100,12 +102,11 @@ export default function EventFields({
     onChange({ ...value, [key]: v });
 
   // 알림 시점은 설치본(Tauri)에서만 뜻이 있다. 서버 prop으로 내려받는 대신
-  // `window.__TAURI_INTERNALS__`(Tauri가 웹뷰에 직접 심어 주는 값)로 클라이언트에서
-  // 바로 판단한다 — AddEventButton부터 여기까지 prop을 계속 이어 나를 필요가 없다.
-  // 서버에는 window가 없어 처음엔 false로 그리고, 마운트 후 다시 확인한다.
+  // 클라이언트에서 바로 판단한다 — AddEventButton부터 여기까지 prop을 계속 이어 나를
+  // 필요가 없다. 서버에는 window가 없어 처음엔 false로 그리고, 마운트 후 다시 확인한다.
   const [isTauri, setIsTauri] = useState(false);
   useEffect(() => {
-    setIsTauri(typeof window !== "undefined" && "__TAURI_INTERNALS__" in window);
+    setIsTauri(isTauriRuntime());
   }, []);
 
   // 기간 입력을 펼쳤는지. 값이 이미 있으면(수정 팝업) 펼친 채로 시작한다.

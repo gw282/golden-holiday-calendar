@@ -175,7 +175,12 @@ export async function applyIcs(
       // 반복은 **화면에서 확정한 값**만 쓴다. 파일의 RRULE을 몰래 적용하지 않는다 —
       // 미리보기에서 본 것과 다른 결과가 나오면 미리보기를 둔 뜻이 없다.
       const repeat = normalizeRepeat(o.repeat);
-      await createEvent({ ...items[i].input, repeat, importBatchId: batchId });
+      await createEvent({
+        ...items[i].input,
+        color: "gray",
+        repeat,
+        importBatchId: batchId,
+      });
       // 반복이면 행이 여러 개 만들어진다. 화면에 "12건 넣었습니다"라고 적어야 하므로
       // 파일의 항목 수가 아니라 실제로 생긴 행 수를 센다. until 모드는 count가 없어서
       // createEvent와 똑같은 함수로 다시 날짜를 펼쳐 실제 회차 수를 구한다.

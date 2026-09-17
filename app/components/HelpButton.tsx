@@ -96,7 +96,9 @@ export default function HelpButton({ desktop = false }: { desktop?: boolean }) {
         // 세로로도 vw/vh 기준 상한을 둔다 — 화면 확대(zoom)는 창 크기(vh)를 줄이지
         // 않아서, 내용이 창보다 커지면 아래쪽이 창 밖으로 밀려날 수 있다. 헤더는
         // 고정하고 본문만 스크롤되게 나눠서 어떤 배율에서도 끝까지 읽을 수 있게 한다.
-        className="m-auto hidden max-h-[85vh] w-[min(30rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg open:flex backdrop:bg-black/40"
+        // vh는 zoom의 영향을 안 받는데 렌더링은 zoom만큼 커지므로, --app-zoom으로
+        // 나눠서 화면에 보이는 실제 높이가 항상 85vh가 되도록 보정한다.
+        className="m-auto hidden max-h-[calc(85vh/var(--app-zoom,1))] w-[min(30rem,calc(100vw-2rem))] flex-col rounded-xl border border-border bg-surface p-0 text-left text-foreground shadow-lg open:flex backdrop:bg-black/40"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">도움말</h2>

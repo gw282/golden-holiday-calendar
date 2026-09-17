@@ -227,7 +227,7 @@ export default function OmniSearch({
           id={SEARCH_INPUT_ID}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={canChat ? "일정 찾기 · 물어보기(챗봇)" : "일정 찾기 (키워드)"}
+          placeholder={canChat ? "일정 찾기 · 물어보기(챗봇)" : "일정 찾기 (키워드, 초성으로 검색)"}
           aria-label="일정 찾기"
           className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted"
         />
@@ -290,7 +290,7 @@ export default function OmniSearch({
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto">
+        <div className="max-h-[calc(70vh/var(--app-zoom,1))] overflow-y-auto">
           {/* 챗봇 — **켜져 있고 외부망일 때만.** 내부망이거나 배포본처럼 꺼 뒀으면
               이 자리 자체가 없다. 누를 수 없는 단추를 회색으로 남겨 두면
               "왜 안 되지"를 매번 묻게 된다 */}

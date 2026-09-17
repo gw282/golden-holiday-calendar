@@ -54,6 +54,8 @@ export default function SettingsPanel({
   const [chime, setChime] = useState(hourlyChime);
   const [chimeAnchor, setChimeAnchor] = useState(hourlyChimeAnchor);
   const [notifyError, setNotifyError] = useState<string | null>(null);
+  const [notifyMessage, setNotifyMessage] = useState<string | null>(null);
+  const [testCooldown, setTestCooldown] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -122,8 +124,11 @@ export default function SettingsPanel({
   async function testNotification() {
     setBusy(true);
     setNotifyError(null);
+    setNotifyMessage(null);
     try {
       await invoke("test_notification");
+      setNotifyMessage("테스트 알림을 보냈습니다.");
+      setTestCooldown(5);
     } catch (error) {
       // Tauri는 Result<T, String> 커맨드가 실패하면 Err 문자열 그대로로
       // reject한다(Error 인스턴스가 아니다) — instanceof Error만 보면 원인이 가려진다.
@@ -134,6 +139,13 @@ export default function SettingsPanel({
       setBusy(false);
     }
   }
+
+  // 알림 테스트는 연달아 누르면 알림이 쌓이므로 보낸 뒤 5초는 다시 못 누르게 한다.
+  useEffect(() => {
+    if (testCooldown <= 0) return;
+    const t = setTimeout(() => setTestCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [testCooldown]);
 
   return (
     <div ref={rootRef} className="relative inline-block">
@@ -254,12 +266,15 @@ export default function SettingsPanel({
 
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || testCooldown > 0}
                 onClick={testNotification}
                 className="w-full rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:border-accent hover:text-accent disabled:opacity-50"
               >
-                🔔 알림 테스트
+                {testCooldown > 0 ? `🔔 ${testCooldown}초 후 다시` : "🔔 알림 테스트"}
               </button>
+              {notifyMessage && !notifyError && (
+                <p className="text-[10px] leading-relaxed text-muted">{notifyMessage}</p>
+              )}
               {notifyError && (
                 <p className="text-[10px] leading-relaxed text-holiday">{notifyError}</p>
               )}
