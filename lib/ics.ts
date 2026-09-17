@@ -16,7 +16,7 @@ import { MAX_REPEAT_COUNT, type CreateInput, type Event, type RepeatFreq } from 
  * 다른 캘린더는 모르는 X- 속성을 무시하고, 우리가 다시 읽을 때는 살아난다.
  */
 
-const PRODID = "-//golden-holiday-calendar//KO";
+const PRODID = "-//mg-manage//KO";
 /** 한 번에 받아들일 최대 건수 — 남의 캘린더를 통째로 넣어 DB가 터지는 것을 막는다 */
 export const MAX_IMPORT = 500;
 
@@ -76,7 +76,7 @@ export function toIcs(events: Event[], stamp = new Date()): string {
 
   for (const e of events) {
     lines.push("BEGIN:VEVENT");
-    lines.push(`UID:${e.id}@golden-holiday.local`);
+    lines.push(`UID:${e.id}@mg-manage.local`);
     lines.push(`DTSTAMP:${dtstamp}`);
     lines.push(`SUMMARY:${escapeText(e.title)}`);
 

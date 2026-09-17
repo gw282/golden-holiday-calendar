@@ -57,7 +57,7 @@ export type TripOptions = {
  * (10/3~10/6과 10/4~10/7이 둘 다 연차 1일) 그대로 내놓으면 같은 연휴가 몇 줄씩 나온다.
  * 좋은 것부터 집고 겹치는 것을 버리는 그리디면 서로 다른 시기만 남는다.
  */
-export function findTrips(o: TripOptions): Trip[] {
+export async function findTrips(o: TripOptions): Promise<Trip[]> {
   const days = Math.trunc(o.days);
   const limit = Math.max(1, Math.trunc(o.limit ?? DEFAULT_LIMIT));
   if (days < 1 || o.to < o.from) return [];
@@ -66,7 +66,7 @@ export function findTrips(o: TripOptions): Trip[] {
   const n = all.length;
   if (n < days) return [];
 
-  const holidays = holidayMap(o.from, o.to);
+  const holidays = await holidayMap(o.from, o.to);
   const rest = new Uint8Array(n);
   for (let i = 0; i < n; i++) rest[i] = isRestDay(all[i], holidays) ? 1 : 0;
 

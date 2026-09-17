@@ -1,0 +1,283 @@
+"use client";
+
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { invoke } from "@tauri-apps/api/core";
+import TimePicker from "./TimePicker";
+import Toggle from "./Toggle";
+
+/**
+ * 헤더에 따로따로 있던 켜고/끄는 단추들(황금연휴 · 주차 표시 · 온라인/오프라인 ·
+ * 알림 시점)을 하나의 "설정" 팝업으로 모았다. 하나씩 알약 단추로 늘어놓으니 헤더가
+ * 좁은 화면에서 줄바꿈이 잦고, 뭐가 기능 토글이고 뭐가 테마·확대 같은 화면 설정인지
+ * 구분도 안 됐다 — 여기 모인 건 전부 **DB나 localStorage에 저장되는 기능 on/off**다.
+ *
+ * 각 항목의 저장 방식은 원래 있던 단추들(RecommendationToggle·OfflineToggle·
+ * ReminderSettings)과 똑같다 — 그 컴포넌트들의 로직을 그대로 옮겨 왔다.
+ * `/api/settings` PATCH 후 `router.refresh()`로 서버 컴포넌트를 다시 그린다.
+ * 주차 표시·절기 표시는 여기 없다 — `CalendarSettingsButton`으로 옮겼다
+ * (달력 화면 취향이라 알림 설정과 묶여 있을 이유가 없었다).
+ */
+
+const PANEL_OPEN_EVENT = "mg-panel-open";
+
+const REMINDER_LABELS: Record<number, string> = {
+  15: "15분 전",
+  30: "30분 전",
+  60: "1시간 전",
+  120: "2시간 전",
+};
+
+export default function SettingsPanel({
+  offline,
+  offlineLocked,
+  isDesktop,
+  reminderOptions,
+  reminderSelected,
+  hourlyChime,
+  hourlyChimeAnchor,
+  startTimeReminder,
+}: {
+  offline: boolean;
+  offlineLocked: boolean;
+  isDesktop: boolean;
+  reminderOptions: readonly number[];
+  reminderSelected: number[];
+  hourlyChime: boolean;
+  hourlyChimeAnchor: string;
+  startTimeReminder: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [, startTransition] = useTransition();
+  const [checkedReminders, setCheckedReminders] = useState(new Set(reminderSelected));
+  const [chime, setChime] = useState(hourlyChime);
+  const [chimeAnchor, setChimeAnchor] = useState(hourlyChimeAnchor);
+  const [notifyError, setNotifyError] = useState<string | null>(null);
+  const [notifyMessage, setNotifyMessage] = useState<string | null>(null);
+  const [testCooldown, setTestCooldown] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    function closeWhenAnotherPanelOpens(event: Event) {
+      if ((event as CustomEvent<string>).detail !== "settings") setOpen(false);
+    }
+    window.addEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
+    return () => window.removeEventListener(PANEL_OPEN_EVENT, closeWhenAnotherPanelOpens);
+  }, []);
+
+  async function patchSettings(body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) startTransition(() => router.refresh());
+    } catch {
+      // 못 바꿔도 화면은 그대로 둔다. 다시 누르면 된다
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleReminder(minutes: number) {
+    const next = new Set(checkedReminders);
+    if (next.has(minutes)) next.delete(minutes);
+    else next.add(minutes);
+    setCheckedReminders(next);
+    patchSettings({ reminderThresholds: [...next] });
+  }
+
+  function toggleChime() {
+    const next = !chime;
+    setChime(next);
+    patchSettings({ hourlyChime: next });
+  }
+
+  function changeChimeAnchor(v: string) {
+    setChimeAnchor(v);
+    patchSettings({ hourlyChimeAnchor: v });
+  }
+
+  function toggleStartTimeReminder() {
+    patchSettings({ startTimeReminder: !startTimeReminder });
+  }
+
+  async function testNotification() {
+    setBusy(true);
+    setNotifyError(null);
+    setNotifyMessage(null);
+    try {
+      await invoke("test_notification");
+      setNotifyMessage("테스트 알림을 보냈습니다.");
+      setTestCooldown(5);
+    } catch (error) {
+      // Tauri는 Result<T, String> 커맨드가 실패하면 Err 문자열 그대로로
+      // reject한다(Error 인스턴스가 아니다) — instanceof Error만 보면 원인이 가려진다.
+      const reason =
+        error instanceof Error ? error.message : typeof error === "string" ? error : null;
+      setNotifyError(reason ? `알림을 띄우지 못했습니다: ${reason}` : "알림을 띄우지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 알림 테스트는 연달아 누르면 알림이 쌓이므로 보낸 뒤 5초는 다시 못 누르게 한다.
+  useEffect(() => {
+    if (testCooldown <= 0) return;
+    const t = setTimeout(() => setTestCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [testCooldown]);
+
+  return (
+    <div ref={rootRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => {
+          const next = !open;
+          if (next) window.dispatchEvent(new CustomEvent(PANEL_OPEN_EVENT, { detail: "settings" }));
+          setOpen(next);
+        }}
+        title="알림 설정"
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
+      >
+        ⏰ 알림 설정
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 flex w-72 flex-col gap-4 rounded-lg border border-border bg-raised p-3 shadow-lg">
+          {/* 데스크톱 설치본은 오프라인 여부가 고정값이라 이 자리에 아예 안 둔다 —
+              사내망 웹 배포본(같은 OFFLINE_DEFAULT=1이지만 브라우저로 접속)만 다룬다 */}
+          {!isDesktop &&
+            (offlineLocked ? (
+              <div className="border-b border-border pb-3">
+                <p className="text-[11px] font-semibold text-muted">인터넷 연결</p>
+                <p className="mt-1 text-[10px] leading-snug text-muted">
+                  회사 내부망용이라 온라인 기능은 사용할 수 없습니다.
+                </p>
+              </div>
+            ) : (
+              <div className="border-b border-border pb-3">
+                <div className="flex items-center justify-between gap-2 text-xs text-foreground">
+                  온라인 기능
+                  <Toggle
+                    checked={!offline}
+                    disabled={busy}
+                    onChange={() => patchSettings({ offline: !offline })}
+                    label="온라인 기능"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] leading-snug text-muted">
+                  항공권·숙소·환율·챗봇 기능을 사용합니다.
+                </p>
+              </div>
+            ))}
+
+          {/* 알림 시점은 설치본에만 있는 기능이다 — 웹 배포본엔 이 알림 자체가 없다 */}
+          {isDesktop && (
+            <>
+              <div>
+                <h3 className="text-xs font-semibold text-foreground">일정 알림</h3>
+                <p className="mt-1 text-[10px] leading-snug text-muted">
+                  일정 시작 전에 미리 알림을 받을 시간을 선택하세요.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2 text-xs text-foreground">
+                  시작 시 알림
+                  <Toggle
+                    checked={startTimeReminder}
+                    disabled={busy}
+                    onChange={toggleStartTimeReminder}
+                    label="시작 시 알림"
+                  />
+                </div>
+                {reminderOptions.map((minutes) => (
+                  <div
+                    key={minutes}
+                    className="flex items-center justify-between gap-2 text-xs text-foreground"
+                  >
+                    {REMINDER_LABELS[minutes] ?? `${minutes}분 전`}
+                    <Toggle
+                      checked={checkedReminders.has(minutes)}
+                      disabled={busy}
+                      onChange={() => toggleReminder(minutes)}
+                      label={REMINDER_LABELS[minutes] ?? `${minutes}분 전`}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {checkedReminders.size === 0 && !startTimeReminder && (
+                <p className="text-[10px] text-muted">
+                  알림 시점을 하나 이상 켜야 일정 알림을 받을 수 있습니다.
+                </p>
+              )}
+
+              <div className="border-t border-border pt-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-xs font-semibold text-foreground">휴식 알림</h3>
+                    <p className="mt-1 text-[10px] text-muted">고른 시각부터 매시 정각에 알려 줍니다.</p>
+                  </div>
+                  <Toggle
+                    checked={chime}
+                    disabled={busy}
+                    onChange={toggleChime}
+                    label="휴식 알림 (1시간 간격)"
+                  />
+                </div>
+                {chime && (
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-[11px] text-muted">시작 시각</span>
+                    <TimePicker
+                      value={chimeAnchor}
+                      onChange={changeChimeAnchor}
+                      disabled={busy}
+                      ariaLabel="휴식 알림 시작 시각"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                disabled={busy || testCooldown > 0}
+                onClick={testNotification}
+                className="w-full rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:border-accent hover:text-accent disabled:opacity-50"
+              >
+                {testCooldown > 0 ? `🔔 ${testCooldown}초 후 다시` : "🔔 알림 테스트"}
+              </button>
+              {notifyMessage && !notifyError && (
+                <p className="text-[10px] leading-relaxed text-muted">{notifyMessage}</p>
+              )}
+              {notifyError && (
+                <p className="text-[10px] leading-relaxed text-holiday">{notifyError}</p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

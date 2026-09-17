@@ -16,13 +16,13 @@ import { checkpoint } from "@/lib/db";
 export async function GET() {
   // 내보내기 = 백업이다. WAL에만 있는 최근 쓰기를 먼저 본체로 밀어 넣어,
   // 사용자가 data/ 폴더를 같이 복사해도 어긋나지 않게 한다.
-  checkpoint();
-  const ics = toIcs(listEvents());
+  await checkpoint();
+  const ics = toIcs(await listEvents());
 
   return new NextResponse(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
-      "Content-Disposition": `attachment; filename="golden-holiday-${today()}.ics"`,
+      "Content-Disposition": `attachment; filename="mg-manage-${today()}.ics"`,
       // 브라우저가 예전 파일을 물고 있으면 백업이 아니라 사고가 된다
       "Cache-Control": "no-store",
     },

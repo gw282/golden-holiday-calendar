@@ -57,6 +57,10 @@ next-env.d.ts
 
 # 배포용 꾸러미 (npm run package)
 dist/
+src-tauri/target/
+src-tauri/runtime/
+src-tauri/gen/schemas/
+golden-holiday-calendar-internal-windows.zip
 
 # Stitch 시안 작업용 임시 도구 (앱과 무관)
 .stitch.mjs

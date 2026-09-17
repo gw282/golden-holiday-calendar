@@ -2,8 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { PreviewItem, PreviewResult } from "@/lib/importIcs";
 import type { RepeatFreq } from "@/lib/events";
+import DatePicker from "./DatePicker";
+import { isTauriRuntime } from "./isTauri";
 
 /**
  * `.ics` 백업 — 내보내기 / 가져오기.
@@ -12,7 +16,7 @@ import type { RepeatFreq } from "@/lib/events";
  * 들어갔는데, 무엇이 들어올지 볼 수도 되돌릴 수도 없었다. 실제로 구글 캘린더를 넣어 보니
  * 공휴일이 두 벌 찍히고, 하루 종일 일정이 연차 추천을 조용히 막았다.
  *
- * 내보내기는 `<a download>`로 끝난다 — fetch로 받아 Blob을 만들 이유가 없다.
+ * 설치본에서는 저장 위치를 고르게 하고, 웹에서는 브라우저 다운로드를 사용한다.
  */
 
 type Choice = { skip: boolean; freq: RepeatFreq | ""; count: string };
@@ -30,12 +34,53 @@ export default function BackupButton() {
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [choices, setChoices] = useState<Record<number, Choice>>({});
   const [done, setDone] = useState<{ batchId: number | null; added: number } | null>(null);
+  // 가져올 기간. 비우면 전체 기간. 파일 하나에 몇 년 치가 섞여 있을 때
+  // (구글 캘린더 내보내기가 특히 그렇다) 필요한 구간만 골라 보게 한다.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function exportIcs() {
+    if (!isTauriRuntime()) {
+      const link = document.createElement("a");
+      link.href = "/api/ics";
+      link.download = "";
+      link.click();
+      return;
+    }
+
+    setBusy(true);
+    setExportMessage(null);
+    setExportError(null);
+    try {
+      const suggested = `mg-manage-${new Date().toISOString().slice(0, 10)}.ics`;
+      const [response, path] = await Promise.all([
+        fetch("/api/ics", { cache: "no-store" }),
+        save({
+          defaultPath: suggested,
+          filters: [{ name: "iCalendar 파일", extensions: ["ics"] }],
+        }),
+      ]);
+      if (!response.ok) throw new Error("내보내기 파일을 만들지 못했습니다.");
+      if (!path) return;
+      const contents = await response.text();
+      await invoke("save_ics_file", { path, contents });
+      setExportMessage(`저장했습니다: ${path}`);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "내보내기에 실패했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function openPreview(file: File) {
     setBusy(true);
     setError(null);
     setPreview(null);
     setDone(null);
+    setRangeFrom("");
+    setRangeTo("");
     try {
       const text = await file.text();
       const res = await fetch("/api/ics/preview", {
@@ -67,13 +112,26 @@ export default function BackupButton() {
     setBusy(true);
     setError(null);
     try {
+      const itemByIndex = new Map((preview?.items ?? []).map((i) => [i.index, i]));
       const overrides: Record<number, { skip?: boolean; repeat?: unknown }> = {};
       for (const [k, c] of Object.entries(choices)) {
+        const index = Number(k);
         const count = Number(c.count);
-        overrides[Number(k)] = {
-          skip: c.skip,
-          repeat: c.freq && count >= 2 ? { freq: c.freq, count } : null,
-        };
+        const item = itemByIndex.get(index);
+        // 기간 필터 밖으로 밀려난 항목은 화면에서 체크를 바꿀 수 없었으므로
+        // choices에 남아 있는 값과 무관하게 항상 뺀다.
+        const skip = c.skip || (item !== undefined && !inRange(item));
+        // 가져올 기간 끝날짜를 정해 뒀으면 반복도 그 날짜에서 멈춘다. 안 그러면
+        // 필터로 고른 기간 안의 일정 하나가 반복이라는 이유만으로 그 뒤 몇 달치가
+        // 필터와 무관하게 계속 생겨, 기간 필터를 무시한 것처럼 보인다.
+        const repeat = !c.freq
+          ? null
+          : rangeTo
+            ? { freq: c.freq, until: rangeTo }
+            : count >= 2
+              ? { freq: c.freq, count }
+              : null;
+        overrides[index] = { skip, repeat };
       }
       const res = await fetch("/api/ics/apply", {
         method: "POST",
@@ -114,22 +172,34 @@ export default function BackupButton() {
     }
   }
 
-  const counts = preview ? tally(preview.items) : null;
-  const willAdd = preview
-    ? preview.items.filter((i) => !choices[i.index]?.skip).length
-    : 0;
+  /** 고른 기간에 걸치는가. 하나라도 비어 있으면 그쪽은 안 가린다 */
+  function inRange(item: PreviewItem): boolean {
+    if (rangeFrom && item.endDate < rangeFrom) return false;
+    if (rangeTo && item.date > rangeTo) return false;
+    return true;
+  }
+
+  const visibleItems = preview ? preview.items.filter(inRange) : [];
+  const hiddenByRange = preview ? preview.items.length - visibleItems.length : 0;
+  const counts = preview ? tally(visibleItems) : null;
+  const willAdd = visibleItems.filter((i) => !choices[i.index]?.skip).length;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="text-[11px] text-muted">데이터</span>
 
-      <a
-        href="/api/ics"
-        download
+      <button
+        type="button"
+        onClick={exportIcs}
+        disabled={busy || pending}
         className="text-[11px] text-muted underline decoration-dotted hover:text-accent"
       >
         내보내기 (.ics)
-      </a>
+      </button>
+      {exportError && <span className="text-[10px] text-red-500">{exportError}</span>}
+      {!exportError && exportMessage && (
+        <span className="text-[10px] text-muted">{exportMessage}</span>
+      )}
 
       <button
         type="button"
@@ -157,7 +227,9 @@ export default function BackupButton() {
           if (e.target === dialog.current) dialog.current?.close();
         }}
         aria-labelledby="ics-title"
-        className="m-auto w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-0 text-left text-foreground shadow-xl backdrop:bg-black/50"
+        // 최소 높이를 둔다 — 기간 필터로 걸러 0건이 되면 목록이 비어 창이 확 줄어드는데,
+        // 그 안의 DatePicker 팝오버(달력)는 그보다 커서 줄어든 창 아래로 잘려 보인다.
+        className="m-auto min-h-[26rem] w-[min(40rem,calc(100vw-2rem))] rounded-2xl border border-border bg-surface p-0 text-left text-foreground shadow-xl backdrop:bg-black/50"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 id="ics-title" className="text-sm font-semibold">
@@ -205,8 +277,57 @@ export default function BackupButton() {
 
         {preview && counts && (
           <>
+            {/* 파일 하나에 몇 년 치가 섞여 있을 때(구글 캘린더 내보내기가 특히 그렇다)
+                필요한 기간만 골라 보게 한다. 비우면 전체 기간 그대로다. */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-[11px] text-muted">
+              <span>가져올 기간</span>
+              <DatePicker
+                value={rangeFrom}
+                onChange={setRangeFrom}
+                ariaLabel="가져올 기간 시작일"
+                placeholder="전체"
+              />
+              <span>~</span>
+              <DatePicker
+                value={rangeTo}
+                onChange={setRangeTo}
+                min={rangeFrom || undefined}
+                ariaLabel="가져올 기간 종료일"
+                placeholder="전체"
+              />
+              {(rangeFrom || rangeTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRangeFrom("");
+                    setRangeTo("");
+                  }}
+                  className="text-accent hover:underline"
+                >
+                  기간 지우기
+                </button>
+              )}
+              {/* 파일 전체가 한 번에 넣을 수 있는 상한(MAX_IMPORT)을 넘으면, 기간을 좁혀서
+                  줄이라고 여기서 바로 알려 준다 — 안 그러면 "넣기"를 눌러야만 실패
+                  메시지로 알게 된다 */}
+              {preview.tooMany && !rangeFrom && !rangeTo && (
+                <span className="text-holiday">
+                  파일이 너무 큽니다 — 기간을 좁혀 주세요
+                </span>
+              )}
+            </div>
+
             <p className="border-b border-border px-4 py-2 text-[11px] text-muted">
-              모두 <span className="text-foreground">{preview.items.length}건</span> — 새로{" "}
+              {hiddenByRange > 0 ? (
+                <>
+                  기간 안 <span className="text-foreground">{visibleItems.length}건</span>
+                  <span className="text-muted"> (기간 밖 {hiddenByRange}건 제외)</span> — 새로{" "}
+                </>
+              ) : (
+                <>
+                  모두 <span className="text-foreground">{visibleItems.length}건</span> — 새로{" "}
+                </>
+              )}
               <span className="text-foreground">{counts.new}건</span>
               {counts.duplicate > 0 && ` · 이미 있음 ${counts.duplicate}건`}
               {counts.holiday > 0 && ` · 공휴일 ${counts.holiday}건`}
@@ -217,13 +338,14 @@ export default function BackupButton() {
               연휴 추천에서 빠집니다.
             </p>
 
-            <ul className="max-h-[46vh] divide-y divide-border overflow-y-auto">
-              {preview.items.map((item) => (
+            <ul className="max-h-[calc(46vh/var(--app-zoom,1))] divide-y divide-border overflow-y-auto">
+              {visibleItems.map((item) => (
                 <Row
                   key={item.index}
                   item={item}
                   choice={choices[item.index]}
                   onChange={(c) => setChoices((prev) => ({ ...prev, [item.index]: c }))}
+                  untilCap={rangeTo || undefined}
                 />
               ))}
             </ul>
@@ -260,10 +382,13 @@ function Row({
   item,
   choice,
   onChange,
+  untilCap,
 }: {
   item: PreviewItem;
   choice: Choice | undefined;
   onChange: (c: Choice) => void;
+  /** 가져올 기간 끝날짜. 정해져 있으면 반복 횟수 입력 대신 이 날짜에서 멈춘다고 보여 준다 */
+  untilCap?: string;
 }) {
   const c = choice ?? { skip: true, freq: "" as const, count: "1" };
   const span = item.endDate > item.date ? `${short(item.date)}~${short(item.endDate)}` : short(item.date);
@@ -314,19 +439,24 @@ function Row({
             <option value="monthly">매월</option>
             <option value="yearly">매년</option>
           </select>
-          {c.freq && (
-            <>
-              <input
-                type="number"
-                min={2}
-                max={60}
-                value={c.count}
-                onChange={(e) => onChange({ ...c, count: e.target.value })}
-                aria-label={`${item.title} 반복 횟수`}
-                className="w-14 rounded-md border border-border bg-transparent px-1.5 py-0.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:border-accent"
-              />
-              회
-            </>
+          {c.freq && untilCap ? (
+            // 가져올 기간 끝날짜가 있으면 횟수를 따로 안 받는다 — 그 날짜에서 멈춘다
+            <span className="text-muted">{short(untilCap)}까지</span>
+          ) : (
+            c.freq && (
+              <>
+                <input
+                  type="number"
+                  min={2}
+                  max={60}
+                  value={c.count}
+                  onChange={(e) => onChange({ ...c, count: e.target.value })}
+                  aria-label={`${item.title} 반복 횟수`}
+                  className="w-14 rounded-md border border-border bg-transparent px-1.5 py-0.5 text-right text-[11px] tabular-nums text-foreground outline-none focus:border-accent"
+                />
+                회
+              </>
+            )
           )}
           {item.repeat?.guessed && (
             <span className="text-holiday">파일에 횟수가 없어 어림한 값입니다</span>

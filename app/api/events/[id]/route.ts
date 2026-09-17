@@ -29,7 +29,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 
   try {
-    const event = updateEvent(id, (body ?? {}) as UpdateInput);
+    const event = await updateEvent(id, (body ?? {}) as UpdateInput);
     if (!event) return NextResponse.json({ error: "일정을 찾을 수 없습니다." }, { status: 404 });
     return NextResponse.json({ event });
   } catch (e) {
@@ -47,14 +47,16 @@ export async function DELETE(request: Request, ctx: Ctx) {
 
   // ?series=1 이면 같은 반복 묶음을 통째로 지운다
   if (new URL(request.url).searchParams.get("series") === "1") {
-    const event = getEvent(id);
+    const event = await getEvent(id);
     if (!event) return NextResponse.json({ error: "일정을 찾을 수 없습니다." }, { status: 404 });
 
-    const deleted = event.seriesId ? deleteSeries(event.seriesId) : Number(deleteEvent(id));
+    const deleted = event.seriesId
+      ? await deleteSeries(event.seriesId)
+      : Number(await deleteEvent(id));
     return NextResponse.json({ ok: true, deleted });
   }
 
-  if (!deleteEvent(id)) {
+  if (!(await deleteEvent(id))) {
     return NextResponse.json({ error: "일정을 찾을 수 없습니다." }, { status: 404 });
   }
   return NextResponse.json({ ok: true, deleted: 1 });

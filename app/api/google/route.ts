@@ -13,7 +13,7 @@ import { chooseCalendar, connection, disconnect, listCalendars, GoogleError } fr
  */
 
 export async function GET(request: Request) {
-  const conn = connection();
+  const conn = await connection();
   const wantList = new URL(request.url).searchParams.get("calendars") === "1";
 
   if (!wantList || !conn.connected) return NextResponse.json({ ...conn, calendars: [] });
@@ -36,12 +36,12 @@ export async function PATCH(request: Request) {
   const id = typeof body.id === "string" ? body.id.trim() : "";
   if (!id) return NextResponse.json({ error: "캘린더를 골라 주세요." }, { status: 400 });
 
-  if (!connection().connected) {
+  if (!(await connection()).connected) {
     return NextResponse.json({ error: "먼저 구글 계정을 연결해 주세요." }, { status: 409 });
   }
 
-  chooseCalendar(id, typeof body.name === "string" ? body.name : "");
-  return NextResponse.json(connection());
+  await chooseCalendar(id, typeof body.name === "string" ? body.name : "");
+  return NextResponse.json(await connection());
 }
 
 export async function DELETE() {

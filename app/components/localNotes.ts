@@ -1,0 +1,95 @@
+"use client";
+
+/**
+ * 날짜별 한 줄 메모 — 서버/DB를 거치지 않는다.
+ * `lib/events.ts`를 client에서 import하면 안 되는 규칙과 별개로, 이건 애초에
+ * DB에 넣을 생각이 없는 개인용 낙서장이다(회의 시각 메모 같은 것). PC를 껐다 켜도
+ * 남아 있어야 하니 localStorage에 그대로 둔다.
+ *
+ * `ThemeToggle.tsx`와 같은 `useSyncExternalStore` 구독 패턴 — 진짜 상태는
+ * localStorage에 있고, 이 파일은 그걸 읽고/쓰고/바뀜을 알리기만 한다.
+ */
+const KEY = "local-day-notes";
+const EMOJI_KEY = "local-day-emoji";
+const CHANGED = "localnoteschange";
+
+type NoteMap = Record<string, string>;
+
+function readMap(key: string): NoteMap {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as NoteMap) : {};
+  } catch {
+    // 파싱 실패(손상된 값)나 접근 불가(프라이빗 창) — 메모가 없는 것으로 취급한다
+    return {};
+  }
+}
+
+function writeMap(key: string, map: NoteMap) {
+  try {
+    localStorage.setItem(key, JSON.stringify(map));
+  } catch {
+    // 저장 실패해도 화면은 계속 써야 한다 — 이 앱의 나머지는 메모와 무관하다
+  }
+  window.dispatchEvent(new Event(CHANGED));
+}
+
+export function readNote(date: string): string {
+  return readMap(KEY)[date] ?? "";
+}
+
+/** 빈 문자열로 저장하면 그 날짜 키 자체를 지운다 — 빈 메모가 계속 쌓이지 않게 */
+export function writeNote(date: string, text: string) {
+  const notes = readMap(KEY);
+  if (text.trim() === "") delete notes[date];
+  else notes[date] = text;
+  writeMap(KEY, notes);
+}
+
+export function hasNote(date: string): boolean {
+  return readNote(date) !== "";
+}
+
+/**
+ * 날짜 칸에 붙이는 이모지 스티커. 메모와 같은 이유로 DB를 안 거친다 —
+ * "이 날 출장" "이 날 생일" 같은 걸 한눈에 표시하는 용도라 텍스트 검색·정렬
+ * 대상이 될 필요가 없다. 메모와 별도 키에 저장해서, 이모지만 찍고 메모는
+ * 안 남기는 경우에도 서로 안 얽힌다.
+ *
+ * 1개만 보여준다 — 날짜 숫자와 같은 줄에 나란히 두는 칸이 좁다. `readEmoji`에서
+ * 자르는 이유는 저장할 때만 잘라 두면 예전에 여러 개를 넣어 뒀던 날짜가 그대로
+ * 남기 때문이다 — 읽을 때 매번 자르면 새 글자를 저장하지 않아도 표시가 바로
+ * 줄어든다. `string.length`로 자르면 이모지 하나가 UTF-16 코드 유닛을 여러 개
+ * 쓰는 경우(피부톤·국기·ZWJ 합성 이모지 등) 중간이 잘려 깨진 글자가 남는다 —
+ * `Intl.Segmenter`로 "사람이 보는 글자 하나" 단위(grapheme)로 세야 정확하다.
+ */
+function limitEmoji(text: string): string {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const graphemes = [...segmenter.segment(text)].map((s) => s.segment);
+  return graphemes.slice(0, 1).join("");
+}
+
+export function readEmoji(date: string): string {
+  return limitEmoji(readMap(EMOJI_KEY)[date] ?? "");
+}
+
+export function writeEmoji(date: string, emoji: string) {
+  const emojis = readMap(EMOJI_KEY);
+  const trimmed = limitEmoji(emoji.trim());
+  if (trimmed === "") delete emojis[date];
+  else emojis[date] = trimmed;
+  writeMap(EMOJI_KEY, emojis);
+}
+
+export function hasEmoji(date: string): boolean {
+  return readEmoji(date) !== "";
+}
+
+export function subscribeNotes(onChange: () => void) {
+  window.addEventListener(CHANGED, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(CHANGED, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}

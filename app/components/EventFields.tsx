@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EVENT_COLORS } from "@/lib/eventColors";
 import { countWorkdays, fmtDays, useHolidayDates, type LeaveTypeOption } from "./leaveDays";
 import Hint from "./Hint";
+import DatePicker from "./DatePicker";
+import TimePicker from "./TimePicker";
+import { isTauriRuntime } from "./isTauri";
 
 /** 추가 폼과 수정 폼이 같은 입력을 쓰도록 모아 둔 것. 제출은 각자 한다. */
 export type EventFieldValues = {
@@ -21,15 +24,31 @@ export type EventFieldValues = {
   color: string;
   /** 반복 주기. 빈 값이면 반복 없음 */
   repeatFreq: string;
-  /** 반복 횟수 (첫 회차 포함) */
+  /** "몇 회"로 정할지 "몇 월 며칠까지"로 정할지 */
+  repeatMode: "count" | "until";
+  /** 반복 횟수 (첫 회차 포함) — repeatMode가 "count"일 때만 쓴다 */
   repeatCount: string;
+  /** 반복 종료일 — repeatMode가 "until"일 때만 쓴다 */
+  repeatUntil: string;
   /** 연차를 쓰는 일정인가 */
   isLeave: boolean;
   /** 어느 휴가인지 (leave_types.id). 빈 값이면 기본 종류 */
   leaveTypeId: string;
   /** 자동 계산과 다르게 낼 때만 채운다 (반차 0.5 · 반반차 0.25). 비우면 자동 */
   leaveDays: string;
+  /** "" = 전역 알림 설정을 따름, "-1" = 시작 시, "0" = 이 일정만 알림 끄기, 그 외엔 분(15/30/60/120) */
+  reminderMinutes: string;
 };
+
+const REMINDER_OPTIONS = [
+  { value: "", label: "기본 알림 설정" },
+  { value: "-1", label: "시작 시 알림" },
+  { value: "15", label: "15분 전" },
+  { value: "30", label: "30분 전" },
+  { value: "60", label: "1시간 전" },
+  { value: "120", label: "2시간 전" },
+  { value: "0", label: "이 일정은 알림 끄기" },
+];
 
 const REPEAT_OPTIONS = [
   { value: "", label: "반복 없음" },
@@ -82,6 +101,14 @@ export default function EventFields({
   const set = <K extends keyof EventFieldValues>(key: K, v: EventFieldValues[K]) =>
     onChange({ ...value, [key]: v });
 
+  // 알림 시점은 설치본(Tauri)에서만 뜻이 있다. 서버 prop으로 내려받는 대신
+  // 클라이언트에서 바로 판단한다 — AddEventButton부터 여기까지 prop을 계속 이어 나를
+  // 필요가 없다. 서버에는 window가 없어 처음엔 false로 그리고, 마운트 후 다시 확인한다.
+  const [isTauri, setIsTauri] = useState(false);
+  useEffect(() => {
+    setIsTauri(isTauriRuntime());
+  }, []);
+
   // 기간 입력을 펼쳤는지. 값이 이미 있으면(수정 팝업) 펼친 채로 시작한다.
   const [showRange, setShowRange] = useState(value.endDate !== "");
 
@@ -111,27 +138,23 @@ export default function EventFields({
 
       <div className="flex flex-col gap-3">
         <Row label="날짜">
-          <input
-            type="date"
+          <DatePicker
             value={value.date}
-            onChange={(e) => set("date", e.target.value)}
+            onChange={(v) => set("date", v)}
             disabled={disabled}
-            aria-label="시작일"
-            className={INPUT}
+            ariaLabel="시작일"
           />
           {showRange ? (
             <>
               <span aria-hidden className="text-xs text-muted">
                 ~
               </span>
-              <input
-                type="date"
+              <DatePicker
                 value={value.endDate}
                 min={value.date}
-                onChange={(e) => set("endDate", e.target.value)}
+                onChange={(v) => set("endDate", v)}
                 disabled={disabled}
-                aria-label="종료일"
-                className={INPUT}
+                ariaLabel="종료일"
               />
               <button
                 type="button"
@@ -180,25 +203,20 @@ export default function EventFields({
           {/* 하루 종일이면 시각 칸을 흐리게 두지 않고 아예 감춘다 */}
           {!value.allDay && (
             <>
-              <input
-                type="time"
+              <TimePicker
                 value={value.startTime}
-                onChange={(e) => set("startTime", e.target.value)}
+                onChange={(v) => set("startTime", v)}
                 disabled={disabled}
-                aria-label="시작 시각"
-                className={INPUT}
+                ariaLabel="시작 시각"
               />
               <span aria-hidden className="text-xs text-muted">
                 ~
               </span>
-              <input
-                type="time"
+              <TimePicker
                 value={value.endTime}
-                min={value.startTime || undefined}
-                onChange={(e) => set("endTime", e.target.value)}
+                onChange={(v) => set("endTime", v)}
                 disabled={disabled || !value.startTime}
-                aria-label="종료 시각"
-                className={INPUT}
+                ariaLabel="종료 시각"
               />
             </>
           )}
@@ -303,32 +321,87 @@ export default function EventFields({
                 </option>
               ))}
             </select>
-            {/* 반복을 고르지 않았으면 횟수 칸은 뜻이 없다 */}
+            {/* 반복을 고르지 않았으면 횟수·종료일 칸은 뜻이 없다 */}
             {value.repeatFreq && (
               <>
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={value.repeatCount}
-                  onChange={(e) => set("repeatCount", e.target.value)}
-                  disabled={disabled}
-                  aria-label="반복 횟수"
-                  className={`${INPUT} w-20`}
-                />
-                <span className="text-[11px] text-muted">회 (첫 회 포함)</span>
+                <div className="flex items-center gap-0.5 rounded-lg bg-background p-0.5">
+                  {(
+                    [
+                      { mode: "count", label: "횟수로" },
+                      { mode: "until", label: "종료일까지" },
+                    ] as const
+                  ).map((o) => (
+                    <button
+                      key={o.mode}
+                      type="button"
+                      onClick={() => set("repeatMode", o.mode)}
+                      disabled={disabled}
+                      className={`rounded-md px-2 py-0.5 text-[11px] transition-colors ${
+                        value.repeatMode === o.mode
+                          ? "bg-surface font-medium text-accent shadow-sm"
+                          : "text-muted hover:text-foreground"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                {value.repeatMode === "count" ? (
+                  <>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={value.repeatCount}
+                      onChange={(e) => set("repeatCount", e.target.value)}
+                      disabled={disabled}
+                      aria-label="반복 횟수"
+                      className={`${INPUT} w-20`}
+                    />
+                    <span className="text-[11px] text-muted">회 (첫 회 포함)</span>
+                  </>
+                ) : (
+                  <DatePicker
+                    value={value.repeatUntil}
+                    onChange={(v) => set("repeatUntil", v)}
+                    min={value.date}
+                    disabled={disabled}
+                    ariaLabel="반복 종료일"
+                    placeholder="종료일 선택"
+                  />
+                )}
               </>
             )}
           </Row>
         )}
 
+        {/* 시각이 있는 일정만 알림이 뜻이 있다 — 하루 종일 일정은 몇 시에 알릴지가 없다 */}
+        {isTauri && !value.allDay && (
+          <Row label="알림">
+            <select
+              value={value.reminderMinutes}
+              onChange={(e) => set("reminderMinutes", e.target.value)}
+              disabled={disabled}
+              aria-label="알림 시점"
+              className={SELECT}
+            >
+              {REMINDER_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </Row>
+        )}
+
         <Row label="메모">
-          <input
+          <textarea
             value={value.memo}
             onChange={(e) => set("memo", e.target.value)}
             disabled={disabled}
-            placeholder="선택"
-            className={`${INPUT} min-w-0 flex-1`}
+            placeholder="선택 — 여러 줄로 적을 수 있습니다"
+            rows={2}
+            className={`${INPUT} min-w-0 flex-1 resize-y`}
           />
         </Row>
       </div>

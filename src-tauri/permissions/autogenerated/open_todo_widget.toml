@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-todo-widget"
+description = "Enables the open_todo_widget command without any pre-configured scope."
+commands.allow = ["open_todo_widget"]
+
+[[permission]]
+identifier = "deny-open-todo-widget"
+description = "Denies the open_todo_widget command without any pre-configured scope."
+commands.deny = ["open_todo_widget"]

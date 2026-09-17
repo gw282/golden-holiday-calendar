@@ -1,12 +1,12 @@
 import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { scheduleTools, systemPrompt } from "@/lib/chatTools";
-import { isOffline } from "@/lib/settings";
+import { isChatEnabled, isOffline } from "@/lib/settings";
 
 /**
  * 챗봇. `POST /api/chat` 로 한 마디 보내고 **SSE**로 답을 받는다.
  *
  * Claude Agent SDK 를 쓴다. SDK 는 Claude Code 실행 파일을 **자식 프로세스로 띄우므로**
- * Node 런타임이 필요하다 (Edge에서는 못 돈다). 이 앱은 `node:sqlite` 때문에 이미
+ * Node 런타임이 필요하다 (Edge에서는 못 돈다). 이 앱은 `@libsql/client` 때문에 이미
  * Node 런타임이라 새로 제약이 생기는 것은 없다.
  *
  * 멀티턴은 `sessionId` 왕복으로 한다. HTTP 요청은 한 번에 끝나므로 스트리밍 입력 모드
@@ -49,7 +49,21 @@ export async function POST(request: Request) {
    * 띄운 **뒤에** 네트워크 실패를 만나므로, 여기서 막지 않으면 프로세스 기동 비용을
    * 내고 나서 실패한다.
    */
-  if (isOffline()) {
+  /**
+   * 이 배포본에 챗봇이 없으면 여기서 끝낸다 (`CHAT_DISABLED=1`).
+   *
+   * 오프라인 검사보다 **먼저** 본다. 이건 DB를 읽지 않는 환경변수 한 번이고,
+   * 무엇보다 이미지에 Claude Code 바이너리를 안 담고 올렸을 때 자식 프로세스를
+   * 띄우려다 실패하는 것을 막아야 한다 — 그 실패는 500으로 나가고 로그만 더럽힌다.
+   */
+  if (!isChatEnabled()) {
+    return Response.json(
+      { error: "이 서버에는 챗봇이 없습니다. 달력·일정·검색은 그대로 쓸 수 있습니다." },
+      { status: 503 },
+    );
+  }
+
+  if (await isOffline()) {
     return Response.json(
       { error: "오프라인 모드입니다. 챗봇은 인터넷 연결이 필요합니다. 달력과 일정은 그대로 쓸 수 있습니다." },
       { status: 503 },

@@ -2,7 +2,7 @@
  * 환산해 보여 줄 통화 목록.
  *
  * 이 파일은 **DB를 import하지 않는다.** 환산 화면이 클라이언트 컴포넌트라
- * `lib/fx.ts`에서 값을 가져오면 `node:sqlite`가 클라이언트 번들로 끌려온다.
+ * `lib/fx.ts`에서 값을 가져오면 `@libsql/client`가 클라이언트 번들로 끌려온다.
  * `lib/eventColors.ts`를 따로 뺀 것과 같은 이유다.
  */
 export type Currency = {

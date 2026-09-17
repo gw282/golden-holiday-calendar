@@ -60,7 +60,7 @@ export default function UpcomingMoreButton({
         </div>
 
         {/* 건수가 많아도 팝업 안에서만 스크롤한다 */}
-        <div className="max-h-[70vh] overflow-y-auto">
+        <div className="max-h-[calc(70vh/var(--app-zoom,1))] overflow-y-auto">
           <EventList events={events} emptyText="다가오는 일정이 없습니다." />
         </div>
       </dialog>

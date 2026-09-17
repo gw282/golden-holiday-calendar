@@ -12,7 +12,7 @@ import { connection, syncEvents, GoogleError } from "@/lib/google";
 const STALE_MINUTES = 30;
 
 export async function POST(request: Request) {
-  const conn = connection();
+  const conn = await connection();
   if (!conn.connected) {
     return NextResponse.json({ error: "구글 캘린더가 연결되어 있지 않습니다." }, { status: 409 });
   }
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await syncEvents();
-    return NextResponse.json({ ...result, lastSyncedAt: connection().lastSyncedAt });
+    return NextResponse.json({ ...result, lastSyncedAt: (await connection()).lastSyncedAt });
   } catch (e) {
     // 구글이 답을 안 준다고 화면이 500이 되면 안 된다. 환율과 같은 원칙이다
     return NextResponse.json(

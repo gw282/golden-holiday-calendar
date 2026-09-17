@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Event } from "@/lib/events";
+import { isChosungQuery, matchesChosung } from "@/lib/hangul";
 import EventList from "./EventList";
 import { SEARCH_INPUT_ID } from "./Shortcuts";
 
@@ -46,7 +47,17 @@ const TOOL_LABEL: Record<string, string> = {
 
 const TOOL_FALLBACK = "확인하는 중";
 
-export default function OmniSearch({ offline = false }: { offline?: boolean }) {
+export default function OmniSearch({
+  offline = false,
+  chat = true,
+}: {
+  offline?: boolean;
+  /** 챗봇을 쓸 수 있나. 배포본에서는 꺼 둔다 — `lib/settings.ts`의 isChatEnabled 참고 */
+  chat?: boolean;
+}) {
+  /* 오프라인이면 밖으로 못 나가고, 꺼 뒀으면 서버에 붙을 것 자체가 없다. 둘 다 결과는 같다 */
+  const canChat = chat && !offline;
+
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const logEnd = useRef<HTMLDivElement>(null);
@@ -68,6 +79,8 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
   const sessionId = useRef<string | undefined>(undefined);
   /** 이 턴에 일정을 추가했나 — 그랬으면 달력을 다시 그려야 한다 */
   const changed = useRef(false);
+  /** 초성 검색용 전체 목록 캐시. 세션 동안만 유지 — 검색할 때마다 다시 받지 않는다 */
+  const allEvents = useRef<Event[] | null>(null);
 
   // 새 줄이 붙으면 아래로 따라간다
   useEffect(() => {
@@ -92,6 +105,27 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
     // ref를 렌더에서 읽으면 값이 바뀌어도 다시 그려지지 않는다(eslint react-hooks/refs).
     dialog.current?.showModal();
     try {
+      // 초성만으로 이루어진 입력은 서버의 LIKE 검색으로는 못 잡는다(부분 문자열
+      // 검색이라 "ㅈㄱㅎㅇ"이 "주간회의"와 글자 그대로 안 겹친다). 전체 목록을
+      // 한 번 받아 클라이언트에서 초성으로 거른다 — 새 API 라우트는 필요 없다.
+      if (isChosungQuery(q)) {
+        if (!allEvents.current) {
+          const res = await fetch(`/api/events`);
+          if (!res.ok) {
+            setError(`'${q}' 검색에 실패했습니다.`);
+            return;
+          }
+          const data = (await res.json()) as { events: Event[] };
+          allEvents.current = data.events;
+        }
+        const matched = allEvents.current.filter(
+          (e) => matchesChosung(e.title, q) || matchesChosung(e.memo, q),
+        );
+        setResults(matched);
+        setTruncated(false);
+        return;
+      }
+
       const res = await fetch(`/api/events?q=${encodeURIComponent(q)}`);
       if (!res.ok) {
         setError(`'${q}' 검색에 실패했습니다.`);
@@ -109,7 +143,7 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
 
   /** 팝업 안에서 한 번 더 눌러야 도는 쪽. 같은 말을 그대로 챗봇에게 넘긴다 */
   async function ask(message: string) {
-    if (!message || busy || offline) return;
+    if (!message || busy || !canChat) return;
 
     setError(null);
     setBusy(true);
@@ -193,7 +227,7 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
           id={SEARCH_INPUT_ID}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={offline ? "일정 찾기 (키워드)" : "일정 찾기 · 물어보기(챗봇)"}
+          placeholder={canChat ? "일정 찾기 · 물어보기(챗봇)" : "일정 찾기 (키워드, 초성으로 검색)"}
           aria-label="일정 찾기"
           className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted"
         />
@@ -256,10 +290,11 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
           </button>
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto">
-          {/* 챗봇 — **외부망에서만.** 내부망에서는 이 자리 자체가 없다.
-              누를 수 없는 단추를 회색으로 남겨 두면 "왜 안 되지"를 매번 묻게 된다 */}
-          {!offline && turns.length > 0 && (
+        <div className="max-h-[calc(70vh/var(--app-zoom,1))] overflow-y-auto">
+          {/* 챗봇 — **켜져 있고 외부망일 때만.** 내부망이거나 배포본처럼 꺼 뒀으면
+              이 자리 자체가 없다. 누를 수 없는 단추를 회색으로 남겨 두면
+              "왜 안 되지"를 매번 묻게 된다 */}
+          {canChat && turns.length > 0 && (
             <div className="border-b border-border px-4 py-2.5">
               {(
                 <div className="space-y-3 text-xs">
@@ -313,9 +348,9 @@ export default function OmniSearch({ offline = false }: { offline?: boolean }) {
             스크롤 영역 **밖**이라 결과가 길어져도 자리를 지킨다 — 안에 두면 아래로 밀려
             찾으려면 끝까지 내려야 한다.
 
-            오프라인에서는 이 줄 자체가 없다. 누를 수 없는 단추를 회색으로 남겨 두면
-            "왜 안 되지"를 매번 묻게 된다. */}
-        {!offline && turns.length === 0 && (
+            챗봇이 없을 때는(오프라인이거나 배포본처럼 꺼 뒀을 때) 이 줄 자체가 없다.
+            누를 수 없는 단추를 회색으로 남겨 두면 "왜 안 되지"를 매번 묻게 된다. */}
+        {canChat && turns.length === 0 && (
           <div className="flex justify-end border-t border-border px-4 py-2">
             <button
               type="button"

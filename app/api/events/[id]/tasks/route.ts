@@ -17,7 +17,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   const id = eventId(raw);
   if (id === null) return NextResponse.json({ error: "잘못된 id입니다." }, { status: 400 });
 
-  return NextResponse.json({ tasks: listTasks(id) });
+  return NextResponse.json({ tasks: await listTasks(id) });
 }
 
 export async function POST(request: Request, ctx: Ctx) {
@@ -29,7 +29,7 @@ export async function POST(request: Request, ctx: Ctx) {
   if (!body) return NextResponse.json({ error: "본문을 읽을 수 없습니다." }, { status: 400 });
 
   try {
-    return NextResponse.json({ task: createTask(id, body.text) }, { status: 201 });
+    return NextResponse.json({ task: await createTask(id, body.text) }, { status: 201 });
   } catch (e) {
     if (e instanceof ValidationError) {
       return NextResponse.json({ error: e.message }, { status: 400 });

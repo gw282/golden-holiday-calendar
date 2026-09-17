@@ -29,7 +29,7 @@ function onDate(request: Request): string | null {
 export async function GET(request: Request) {
   const on = onDate(request);
   if (on === null) return NextResponse.json({ error: "잘못된 날짜입니다." }, { status: 400 });
-  return NextResponse.json({ leaves: leaveSummaries(on) });
+  return NextResponse.json({ leaves: await leaveSummaries(on) });
 }
 
 /**
@@ -45,15 +45,19 @@ export async function PUT(request: Request) {
   }
 
   const { typeId, on, total } = (body ?? {}) as Record<string, unknown>;
-  const type = getLeaveType(Number(typeId));
+  const type = await getLeaveType(Number(typeId));
   if (!type) return NextResponse.json({ error: "휴가 종류를 찾을 수 없습니다." }, { status: 404 });
 
   const base = typeof on === "string" && isValidDateStr(on) ? on : today();
 
   try {
     // 주기 시작일은 서버가 정한다. 클라이언트가 보내면 경계를 잘못 계산할 여지가 생긴다.
-    setGrant(type.id, periodOf(type, base).start, total === null || total === "" ? null : Number(total));
-    return NextResponse.json({ leave: summarize(type, base) });
+    await setGrant(
+      type.id,
+      periodOf(type, base).start,
+      total === null || total === "" ? null : Number(total),
+    );
+    return NextResponse.json({ leave: await summarize(type, base) });
   } catch (e) {
     if (e instanceof ValidationError) {
       return NextResponse.json({ error: e.message }, { status: 400 });
@@ -77,7 +81,7 @@ export async function PATCH(request: Request) {
   const { typeId, anchorDate, name } = (body ?? {}) as Record<string, unknown>;
 
   try {
-    const updated = updateLeaveType(Number(typeId), {
+    const updated = await updateLeaveType(Number(typeId), {
       anchorDate:
         anchorDate === undefined
           ? undefined
@@ -89,7 +93,7 @@ export async function PATCH(request: Request) {
     if (!updated) {
       return NextResponse.json({ error: "휴가 종류를 찾을 수 없습니다." }, { status: 404 });
     }
-    return NextResponse.json({ leave: summarize(updated) });
+    return NextResponse.json({ leave: await summarize(updated) });
   } catch (e) {
     if (e instanceof ValidationError) {
       return NextResponse.json({ error: e.message }, { status: 400 });

@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { all, get, batch } from "./db";
 import { today, type DateStr } from "./date";
 import { FX_CURRENCIES } from "./currencies";
 
@@ -31,10 +31,11 @@ export type FxSnapshot = {
   stale: boolean;
 };
 
-function readRates(date: DateStr): FxRate[] {
-  const rows = getDb()
-    .prepare(`SELECT quote, rate FROM fx_rates WHERE date = ? ORDER BY quote`)
-    .all(date) as unknown as Array<{ quote: string; rate: number }>;
+async function readRates(date: DateStr): Promise<FxRate[]> {
+  const rows = await all<{ quote: string; rate: number }>(
+    `SELECT quote, rate FROM fx_rates WHERE date = ? ORDER BY quote`,
+    [date],
+  );
 
   // 화면에 내놓기로 한 순서를 지킨다 (DB는 알파벳 순으로 준다)
   const byCode = new Map(rows.map((r) => [r.quote, Number(r.rate)]));
@@ -45,23 +46,21 @@ function readRates(date: DateStr): FxRate[] {
 }
 
 /** 마지막으로 받아 둔 날짜. 한 번도 못 받았으면 null */
-function latestDate(): DateStr | null {
-  const row = getDb().prepare(`SELECT MAX(date) AS d FROM fx_rates`).get() as unknown as
-    | { d: string | null }
-    | undefined;
+async function latestDate(): Promise<DateStr | null> {
+  const row = await get<{ d: string | null }>(`SELECT MAX(date) AS d FROM fx_rates`);
   return row?.d ?? null;
 }
 
-function save(date: DateStr, rates: Record<string, number>) {
-  const db = getDb();
-  const insert = db.prepare(
-    `INSERT INTO fx_rates (date, quote, rate) VALUES (?, ?, ?)
-     ON CONFLICT(date, quote) DO UPDATE SET rate = excluded.rate`
+// 통화 열 몇 개를 하나씩 await하면 원격에서 왕복이 그만큼 늘어난다. 한 번에 보낸다.
+async function save(date: DateStr, rates: Record<string, number>) {
+  const sql = `INSERT INTO fx_rates (date, quote, rate) VALUES (?, ?, ?)
+               ON CONFLICT(date, quote) DO UPDATE SET rate = excluded.rate`;
+  await batch(
+    FX_CURRENCIES.flatMap(({ code }) => {
+      const rate = rates[code];
+      return typeof rate === "number" && rate > 0 ? [{ sql, args: [date, code, rate] }] : [];
+    }),
   );
-  for (const { code } of FX_CURRENCIES) {
-    const rate = rates[code];
-    if (typeof rate === "number" && rate > 0) insert.run(date, code, rate);
-  }
 }
 
 /**
@@ -75,7 +74,7 @@ export async function fxSnapshot(): Promise<FxSnapshot | null> {
 
   // 통화를 새로 추가했으면 오늘 치가 있어도 **모자란** 상태다. 다 있을 때만 캐시로 인정한다 —
   // 개수만 보면 목록이 늘어난 날 새 통화가 하루 종일 빈칸으로 남는다.
-  const cached = readRates(t);
+  const cached = await readRates(t);
   if (cached.length === FX_CURRENCIES.length) return { date: t, rates: cached, stale: false };
 
   try {
@@ -87,8 +86,8 @@ export async function fxSnapshot(): Promise<FxSnapshot | null> {
     if (res.ok) {
       const data = (await res.json()) as { result?: string; rates?: Record<string, number> };
       if (data.result === "success" && data.rates) {
-        save(t, data.rates);
-        const fresh = readRates(t);
+        await save(t, data.rates);
+        const fresh = await readRates(t);
         if (fresh.length > 0) return { date: t, rates: fresh, stale: false };
       }
     }
@@ -99,9 +98,9 @@ export async function fxSnapshot(): Promise<FxSnapshot | null> {
   // 받아오지 못했지만 오늘 치가 일부라도 있으면 그걸 쓴다 (통화를 막 추가한 경우)
   if (cached.length > 0) return { date: t, rates: cached, stale: false };
 
-  const last = latestDate();
+  const last = await latestDate();
   if (!last) return null;
 
-  const old = readRates(last);
+  const old = await readRates(last);
   return old.length > 0 ? { date: last, rates: old, stale: true } : null;
 }

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MG 매니지",
+  "version": "1.3.0",
+  "identifier": "com.mgmanage.desktop",
+  "build": {
+    "beforeDevCommand": "npm run tauri:prepare && npm run dev",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "web"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "publisher": "개인 제작 (비공식 도구)",
+    "shortDescription": "공휴일 정보와 휴식 조합을 제공하는 캘린더",
+    "longDescription": "공휴일 정보와 휴식 조합(황금연휴 추천)을 제공합니다.",
+    "resources": {
+      "runtime/app": "app",
+      "runtime/node.exe": "node.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/installer-icon.ico",
+        "uninstallerIcon": "icons/installer-icon.ico",
+        "installerHooks": "nsis-hooks.nsh",
+        "languages": ["Korean", "English"]
+      }
+    }
+  }
+}

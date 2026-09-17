@@ -1,14 +1,30 @@
 import Link from "next/link";
 import type { CalendarDay, CalendarMonth } from "@/lib/calendar";
 import type { Event } from "@/lib/events";
-import type { DateStr } from "@/lib/date";
+import { isoWeekNumber, type DateStr, type WeekStart } from "@/lib/date";
 import { colorFg, colorHex } from "@/lib/eventColors";
+import DayCellInteractive from "./DayCellInteractive";
+import EventPreviewChip from "./EventPreviewChip";
 
-/** 월요일 시작. 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다 */
-const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+/** 0=일 … 6=토 요일 이름. 헤더는 이 인덱스로 색을 정하지, 화면 위치로 정하지 않는다 —
+    주 시작 요일이 바뀌어도 "일요일은 빨강" 규칙 자체는 그대로여야 하기 때문이다 */
+const WEEKDAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+/**
+ * 헤더에 보여줄 요일 순서(0=일…6=토 인덱스 배열).
+ * 월요일 시작이 기본인 이유: 주말이 오른쪽 끝에 붙어 연휴가 한눈에 이어져 보인다.
+ * 일요일 시작으로 바꾸면 그 대신 익숙한 배치가 되지만, 토요일과 다음 주 일요일이
+ * 줄 경계에서 갈라진다 — 사용자가 고른 트레이드오프라 그대로 따른다.
+ */
+function weekdayOrder(weekStart: WeekStart): number[] {
+  return weekStart === "sun" ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
+}
 
 /** 띠 한 줄의 높이(px). 칸 아래에 이만큼씩 자리를 비워 둔다 */
 const BAND_HEIGHT = 18;
+
+/** 왼쪽 주차 배지 폭. 헤더 줄의 빈 스페이서도 이 폭에 맞춘다 */
+const WEEK_NUM_WIDTH = "1.75rem";
 
 type Range = { start: DateStr; end: DateStr };
 
@@ -16,7 +32,10 @@ type Range = { start: DateStr; end: DateStr };
 type Band = { event: Event; from: number; length: number; lane: number; continues: boolean };
 
 /**
- * 서버 컴포넌트 — 셀은 전부 링크라 클라이언트 JS가 필요 없다.
+ * 서버 컴포넌트 — 월/주 레이아웃과 띠(band) 계산은 여기서 그대로 한다.
+ * 셀 자체는 더블클릭 메모 때문에 얇은 클라이언트 리프(`DayCellInteractive`)로
+ * 감싸져 있지만, 그 내용물(공휴일명·일정 미리보기)은 여전히 이 파일이 계산해
+ * children으로 넘긴다 — 다시 계산하지 않는다.
  *
  * 여러 날에 걸친 일정은 칸마다 같은 제목을 반복하지 않고 **가로 띠**로 그린다.
  * 그래서 42칸을 한 번에 깔지 않고 **주 단위로** 렌더링한다. 주마다 relative 컨테이너를
@@ -26,12 +45,15 @@ export default function CalendarGrid({
   month,
   selected,
   hrefFor,
+  weekStart = "mon",
   highlightRange,
   highlightKey = "",
 }: {
   month: CalendarMonth;
   selected: DateStr;
   hrefFor: (date: DateStr) => string;
+  /** month.weeks가 이미 이 기준으로 짜여 있다 — 헤더 요일 순서를 맞추는 데만 쓴다 */
+  weekStart?: WeekStart;
   /** 추천에서 넘어온 연휴 구간 — 그 날들이 잠깐 깜빡인다 */
   highlightRange?: Range | null;
   /** 이 값이 바뀌면 셀을 새로 마운트해 애니메이션을 다시 태운다 */
@@ -41,17 +63,24 @@ export default function CalendarGrid({
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <div className="grid grid-cols-7 border-b border-border">
-        {WEEKDAYS.map((w, i) => (
-          <div
-            key={w}
-            className={`py-2 text-center text-xs font-medium ${
-              i === 6 ? "text-holiday" : i === 5 ? "text-saturday" : "text-muted"
-            }`}
-          >
-            {w}
-          </div>
-        ))}
+      <div className="flex border-b border-border">
+        <div
+          aria-hidden
+          style={{ width: WEEK_NUM_WIDTH }}
+          className="week-num shrink-0 border-r border-border"
+        />
+        <div className="grid flex-1 grid-cols-7">
+          {weekdayOrder(weekStart).map((wd) => (
+            <div
+              key={wd}
+              className={`py-2 text-center text-xs font-medium ${
+                wd === 0 ? "text-holiday" : wd === 6 ? "text-saturday" : "text-muted"
+              }`}
+            >
+              {WEEKDAY_KO[wd]}
+            </div>
+          ))}
+        </div>
       </div>
 
       {month.weeks.map((week, weekIndex) => {
@@ -60,55 +89,68 @@ export default function CalendarGrid({
         const isLastWeek = weekIndex === month.weeks.length - 1;
 
         return (
-          <div key={week[0].date} className="relative">
-            <div className="grid grid-cols-7">
-              {week.map((day) => (
-                <Cell
-                  key={`${day.date}:${highlightKey}`}
-                  day={day}
-                  selected={day.date === selected}
-                  flash={inRange(day.date, highlightRange)}
-                  reservedPx={lanes * BAND_HEIGHT}
-                  bottomBorder={!isLastWeek}
-                  href={hrefFor(day.date)}
-                />
-              ))}
+          <div key={week[0].date} className="flex">
+            {/* ISO 주차. 그 주의 월요일(week[0])이 속한 주차를 그대로 쓴다 */}
+            <div
+              aria-hidden
+              style={{ width: WEEK_NUM_WIDTH }}
+              className={`week-num flex shrink-0 items-start justify-center border-r border-border pt-1.5 font-mono text-[10px] text-muted ${
+                isLastWeek ? "" : "border-b"
+              }`}
+            >
+              {isoWeekNumber(week[0].date)}
             </div>
 
-            {bands.map((band) => (
-              // 래퍼는 클릭을 통과시킨다. 띠가 아래 날짜 칸의 절반가량을 덮고 있어서
-              // 그대로 두면 빈 자리를 눌러도 일정 시작일로 튄다.
-              <div
-                key={band.event.id}
-                className="pointer-events-none absolute px-1"
-                style={{
-                  left: `${(band.from / 7) * 100}%`,
-                  width: `${(band.length / 7) * 100}%`,
-                  bottom: `${band.lane * BAND_HEIGHT + 2}px`,
-                }}
-              >
-                <Link
-                  href={hrefFor(band.event.date)}
-                  scroll={false}
-                  className={`pointer-events-auto block truncate rounded px-1.5 py-0.5 text-[10px] leading-tight ${
-                    band.event.done
-                      ? "bg-border text-muted line-through"
-                      : "hover:brightness-110"
-                  }`}
-                  style={
-                    band.event.done
-                      ? undefined
-                      : {
-                          backgroundColor: colorHex(band.event.color),
-                          color: colorFg(band.event.color),
-                        }
-                  }
-                >
-                  {band.event.title}
-                  {band.continues && " ›"}
-                </Link>
+            <div className="relative flex-1">
+              <div className="grid grid-cols-7">
+                {week.map((day) => (
+                  <Cell
+                    key={`${day.date}:${highlightKey}`}
+                    day={day}
+                    selected={day.date === selected}
+                    flash={inRange(day.date, highlightRange)}
+                    reservedPx={lanes * BAND_HEIGHT}
+                    bottomBorder={!isLastWeek}
+                    href={hrefFor(day.date)}
+                  />
+                ))}
               </div>
-            ))}
+
+              {bands.map((band) => (
+                // 래퍼는 클릭을 통과시킨다. 띠가 아래 날짜 칸의 절반가량을 덮고 있어서
+                // 그대로 두면 빈 자리를 눌러도 일정 시작일로 튄다.
+                <div
+                  key={band.event.id}
+                  className="pointer-events-none absolute px-1"
+                  style={{
+                    left: `${(band.from / 7) * 100}%`,
+                    width: `${(band.length / 7) * 100}%`,
+                    bottom: `${band.lane * BAND_HEIGHT + 2}px`,
+                  }}
+                >
+                  <Link
+                    href={hrefFor(band.event.date)}
+                    scroll={false}
+                    className={`pointer-events-auto block truncate rounded px-1.5 py-0.5 text-[10px] leading-tight ${
+                      band.event.done
+                        ? "bg-border text-muted line-through"
+                        : "hover:brightness-110"
+                    }`}
+                    style={
+                      band.event.done
+                        ? undefined
+                        : {
+                            backgroundColor: colorHex(band.event.color),
+                            color: colorFg(band.event.color),
+                          }
+                    }
+                  >
+                    {band.event.title}
+                    {band.continues && " ›"}
+                  </Link>
+                </div>
+              ))}
+            </div>
           </div>
         );
       })}
@@ -202,10 +244,14 @@ function Cell({
   const hidden = day.events.length - shown.length;
 
   return (
-    <Link
+    <DayCellInteractive
+      date={day.date}
       href={href}
-      scroll={false}
-      aria-current={selected ? "date" : undefined}
+      selected={selected}
+      dayOfMonth={day.dayOfMonth}
+      isToday={day.isToday}
+      numberColorClass={numberColor}
+      lunar={day.lunar}
       style={{ paddingBottom: `${reservedPx + 6}px` }}
       className={`flex min-h-[84px] flex-col gap-0.5 border-r border-border p-1.5 text-left transition-colors [&:nth-child(7n)]:border-r-0 hover:bg-accent-soft/60 ${
         bottomBorder ? "border-b" : ""
@@ -213,35 +259,36 @@ function Cell({
         flash ? "flash-day" : ""
       }`}
     >
-      <span
-        className={`inline-flex h-5 min-w-5 shrink-0 items-center justify-center self-start rounded-full px-1 text-xs font-medium ${
-          day.isToday ? "bg-accent text-on-accent" : numberColor
-        }`}
-      >
-        {day.dayOfMonth}
-      </span>
-
       {day.holiday && (
         <span className="truncate text-[10px] leading-tight text-holiday">{day.holiday.name}</span>
       )}
 
-      {shown.map((e) => (
-        <span
-          key={e.id}
-          className={`flex items-center gap-1 truncate text-[11px] leading-tight ${
-            e.done ? "text-muted line-through" : "text-foreground"
-          }`}
-        >
-          <span
-            aria-hidden
-            className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-            style={{ backgroundColor: e.done ? "var(--border)" : colorHex(e.color) }}
-          />
-          <span className="truncate">{e.title}</span>
+      {/* 기본은 꺼짐 — globals.css가 data-solar-term="on"일 때만 보이게 한다.
+          항상 그려 두는 이유는 weekNum과 같다: 서버는 계산만 하고, 보이기/숨기기는
+          CSS 하나로 끝내 서버 재요청 없이 즉시 토글되게 하려는 것이다. */}
+      {day.solarTerm && (
+        <span className="solar-term truncate text-[10px] leading-tight text-solar-term">
+          {day.solarTerm}
         </span>
+      )}
+
+      {/* DB 이벤트가 아니라 순수 표시용이라 색은 이 자리에서만 hex로 직접 준다.
+          title로 "왜 못 고치지"에 미리 답해 둔다 — 직접 등록·수정할 길이 없다 */}
+      {day.milestone && (
+        <span
+          className="truncate text-[10px] leading-tight"
+          style={{ color: day.milestone.color }}
+          title={`${day.milestone.title} — 회사 고정 일정이라 직접 등록·수정할 수 없습니다`}
+        >
+          {day.milestone.title}
+        </span>
+      )}
+
+      {shown.map((e) => (
+        <EventPreviewChip key={e.id} title={e.title} done={e.done} colorHex={colorHex(e.color)} />
       ))}
 
       {hidden > 0 && <span className="text-[10px] text-muted">+{hidden}건</span>}
-    </Link>
+    </DayCellInteractive>
   );
 }

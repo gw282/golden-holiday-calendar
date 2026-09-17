@@ -119,12 +119,17 @@ export function addMonths(m: MonthStr, n: number): MonthStr {
   return toDateStr(new Date(Date.UTC(y, mo - 1 + n, 1))).slice(0, 7);
 }
 
+/** 달력이 한 주를 어느 요일부터 그릴지 — 설정에서 고를 수 있다 (기본 월요일) */
+export type WeekStart = "mon" | "sun";
+
 /**
- * 그 날이 속한 주의 **월요일**.
- * 달력을 월요일 시작으로 그리기 때문이다. dayOfWeek는 0=일이라 월요일을 0으로 옮겨 계산한다.
+ * 그 날이 속한 주의 시작일. 기본은 **월요일**(달력을 그렇게 그리기 때문)이고,
+ * dayOfWeek는 0=일이라 월요일을 0으로 옮겨 계산한다. `weekStart`가 "sun"이면
+ * 그대로 dayOfWeek만큼 빼면 일요일이 나온다.
  */
-export function startOfWeek(s: DateStr): DateStr {
-  return addDays(s, -((dayOfWeek(s) + 6) % 7));
+export function startOfWeek(s: DateStr, weekStart: WeekStart = "mon"): DateStr {
+  const offset = weekStart === "sun" ? dayOfWeek(s) : (dayOfWeek(s) + 6) % 7;
+  return addDays(s, -offset);
 }
 
 /** '2026년 9월' */
@@ -140,8 +145,39 @@ export function formatShortKo(s: DateStr): string {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${weekdayKo(s)})`;
 }
 
+/**
+ * 며칠에 걸친 일정의 날짜 표기 — 업무 보고용 복사(CopyDayButton)에 쓴다.
+ * 하루짜리는 '9월 25일', 같은 달 안이면 '9월 25일~27일', 달이 바뀌면
+ * '9월 30일~10월 2일'처럼 끝 날짜에도 달을 다시 적는다 — 달을 안 적으면
+ * "30일~2일"만 보고는 어느 쪽이 먼저인지, 심지어 몇 달인지도 알 수 없다.
+ */
+export function formatRangeKo(from: DateStr, to: DateStr): string {
+  const a = parseDate(from);
+  const b = parseDate(to);
+  const am = a.getUTCMonth() + 1;
+  const ad = a.getUTCDate();
+  const bm = b.getUTCMonth() + 1;
+  const bd = b.getUTCDate();
+
+  if (from === to) return `${am}월 ${ad}일`;
+  if (am === bm) return `${am}월 ${ad}일~${bd}일`;
+  return `${am}월 ${ad}일~${bm}월 ${bd}일`;
+}
+
 
 /* ── 시각(HH:MM) 유틸 — 겹침 검사용 ───────────────────────────────── */
+
+/**
+ * ISO-8601 주차. 그 주의 목요일이 속한 연도 기준으로 센다 — 12월 말/1월 초 주가
+ * 어느 해 1주차인지가 이 규칙으로 정해진다. 달력이 이미 월요일 시작이라 그대로 맞는다.
+ */
+export function isoWeekNumber(s: DateStr): number {
+  const d = parseDate(s);
+  const dayIdx = (d.getUTCDay() + 6) % 7; // 0=월 … 6=일
+  const thursday = new Date(d.getTime() + (3 - dayIdx) * DAY_MS);
+  const yearStart = Date.UTC(thursday.getUTCFullYear(), 0, 1);
+  return Math.ceil((Math.round((thursday.getTime() - yearStart) / DAY_MS) + 1) / 7);
+}
 
 /** 'HH:MM' -> 자정부터의 분. 형식이 아니면 null (검증은 lib/events.ts가 이미 한다) */
 export function minutesOf(hhmm: string | null | undefined): number | null {

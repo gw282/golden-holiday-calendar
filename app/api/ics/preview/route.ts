@@ -13,5 +13,5 @@ export async function POST(request: Request) {
   if (!text.includes("BEGIN:VEVENT")) {
     return NextResponse.json({ error: "일정이 들어 있는 .ics 파일이 아닙니다." }, { status: 400 });
   }
-  return NextResponse.json(previewIcs(text));
+  return NextResponse.json(await previewIcs(text));
 }

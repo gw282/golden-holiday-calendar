@@ -1,0 +1,48 @@
+[package]
+name = "mg-manage"
+version = "1.3.0"
+description = "MG 매니지 데스크톱 셸"
+authors = ["MG 매니지"]
+edition = "2021"
+
+[lib]
+name = "mg_manage_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+# 창을 닫아도 트레이에 숨을 뿐 프로세스가 안 죽어서, 아이콘을 또 누르면 두 번째
+# 인스턴스가 뜬다 — 각자 알림 스레드(run_notifier)를 따로 돌려 휴식 알림이 두 번
+# 오는 등 겹침이 생긴다. 이 플러그인이 두 번째 실행 시도를 가로채 기존 창만 띄운다
+tauri-plugin-single-instance = "2"
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+# 로컬 서버(127.0.0.1)만 찌르는 동기 폴링이라 tokio 비동기 스택 없이 가벼운 동기 클라이언트로 충분하다
+ureq = { version = "2", default-features = false, features = ["json"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+# 창 반투명은 Tauri 공식 API에 없어(Win32뿐 아니라 크로스플랫폼 API 자체가 없다)
+# 레이어드 윈도우를 직접 다룬다. wry/webview2-com이 이미 물고 오는 크레이트라
+# 새로 무거워지는 게 아니라 버전만 맞춰 직접 의존성으로 올린 것이다.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  "Win32_Security",
+] }
+# 윈도우 토스트 알림의 발신자 이름 — AUMID(앱 식별자)에 매핑된 DisplayName을
+# 레지스트리에 직접 등록해야 뜬다. 등록하지 않으면 Windows가 identifier 문자열
+# ("com.mgmanage.desktop")을 그대로 보여준다.
+windows-registry = "0.5"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

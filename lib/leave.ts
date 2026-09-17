@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { all, get, run, batch } from "./db";
 import { LEAVE_STEP, ValidationError } from "./events";
 import { listHolidays } from "./calendar";
 import { addDays, eachDay, isValidDateStr, isWeekend, today, type DateStr } from "./date";
@@ -96,30 +96,26 @@ function toType(r: TypeRow): LeaveType {
   };
 }
 
-export function listLeaveTypes(): LeaveType[] {
-  const rows = getDb()
-    .prepare(`SELECT * FROM leave_types ORDER BY sort_order, id`)
-    .all() as unknown as TypeRow[];
+export async function listLeaveTypes(): Promise<LeaveType[]> {
+  const rows = await all<TypeRow>(`SELECT * FROM leave_types ORDER BY sort_order, id`);
   return rows.map(toType);
 }
 
-export function getLeaveType(id: number): LeaveType | null {
-  const row = getDb().prepare(`SELECT * FROM leave_types WHERE id = ?`).get(id) as
-    | unknown as TypeRow
-    | undefined;
+export async function getLeaveType(id: number): Promise<LeaveType | null> {
+  const row = await get<TypeRow>(`SELECT * FROM leave_types WHERE id = ?`, [id]);
   return row ? toType(row) : null;
 }
 
 /** 종류를 못 찾았을 때 기댈 기본값 (정렬 첫 번째 = 연차) */
-export function defaultLeaveType(): LeaveType | null {
-  return listLeaveTypes()[0] ?? null;
+export async function defaultLeaveType(): Promise<LeaveType | null> {
+  return (await listLeaveTypes())[0] ?? null;
 }
 
 /** 입사일·이름 등 설정을 고친다. 넘긴 것만 바꾼다. */
-export function updateLeaveType(
+export async function updateLeaveType(
   id: number,
   patch: { anchorDate?: DateStr | null; name?: string },
-): LeaveType | null {
+): Promise<LeaveType | null> {
   const sets: string[] = [];
   const values: Array<string | null> = [];
 
@@ -138,17 +134,15 @@ export function updateLeaveType(
   }
   if (sets.length === 0) throw new ValidationError("변경할 항목이 없습니다.");
 
-  const before = getLeaveType(id);
-  getDb()
-    .prepare(`UPDATE leave_types SET ${sets.join(", ")} WHERE id = ?`)
-    .run(...values, id);
-  const after = getLeaveType(id);
+  const before = await getLeaveType(id);
+  await run(`UPDATE leave_types SET ${sets.join(", ")} WHERE id = ?`, [...values, id]);
+  const after = await getLeaveType(id);
 
   // 입사일이 바뀌면 주기 경계가 통째로 움직인다. 그대로 두면 이미 넣어 둔 지급 일수가
   // 옛 주기 시작일에 묶여 **화면에서 사라진다** — 사용자는 숫자가 날아갔다고 느낀다.
   // 그래서 옛 지급을 새 주기로 옮겨 준다.
   if (after && before && patch.anchorDate !== undefined && before.anchorDate !== after.anchorDate) {
-    remapGrants(before, after);
+    await remapGrants(before, after);
   }
   return after;
 }
@@ -164,50 +158,55 @@ export function updateLeaveType(
  * 그 숫자는 "지금 쓰고 있는 휴가"를 뜻하기 때문이다. 오늘을 안 품는 옛 주기(과거·미래)는
  * 시작일 기준 그대로 둔다.
  */
-function remapGrants(before: LeaveType, after: LeaveType): void {
-  const db = getDb();
-  const rows = db
-    .prepare(`SELECT period_start, total_days FROM leave_grants WHERE type_id = ? ORDER BY period_start`)
-    .all(before.id) as unknown as Array<{ period_start: DateStr; total_days: number }>;
+async function remapGrants(before: LeaveType, after: LeaveType): Promise<void> {
+  const rows = await all<{ period_start: DateStr; total_days: number }>(
+    `SELECT period_start, total_days FROM leave_grants WHERE type_id = ? ORDER BY period_start`,
+    [before.id],
+  );
   if (rows.length === 0) return;
 
   const t = today();
+  const insertSql = `INSERT INTO leave_grants (type_id, period_start, total_days) VALUES (?, ?, ?)
+     ON CONFLICT(type_id, period_start) DO UPDATE SET total_days = excluded.total_days`;
 
-  db.prepare(`DELETE FROM leave_grants WHERE type_id = ?`).run(before.id);
-  const insert = db.prepare(
-    `INSERT INTO leave_grants (type_id, period_start, total_days) VALUES (?, ?, ?)
-     ON CONFLICT(type_id, period_start) DO UPDATE SET total_days = excluded.total_days`,
-  );
-
-  for (const r of rows) {
-    const old = periodOf(before, r.period_start);
-    const basis = t >= old.start && t <= old.end ? t : r.period_start;
-    insert.run(after.id, periodOf(after, basis).start, r.total_days);
-  }
+  // 지우기와 다시 넣기를 **한 트랜잭션으로** 묶는다. 원격에서 중간에 끊기면
+  // 지급 일수가 통째로 사라진 상태로 남을 수 있다.
+  await batch([
+    { sql: `DELETE FROM leave_grants WHERE type_id = ?`, args: [before.id] },
+    ...rows.map((r) => {
+      const old = periodOf(before, r.period_start);
+      const basis = t >= old.start && t <= old.end ? t : r.period_start;
+      return { sql: insertSql, args: [after.id, periodOf(after, basis).start, r.total_days] };
+    }),
+  ]);
 }
 
 
 /* ── 지급 일수 ───────────────────────────────────────────────────────── */
 
-export function getGrant(typeId: number, periodStart: DateStr): number | null {
-  const row = getDb()
-    .prepare(`SELECT total_days FROM leave_grants WHERE type_id = ? AND period_start = ?`)
-    .get(typeId, periodStart) as unknown as { total_days: number } | undefined;
+export async function getGrant(typeId: number, periodStart: DateStr): Promise<number | null> {
+  const row = await get<{ total_days: number }>(
+    `SELECT total_days FROM leave_grants WHERE type_id = ? AND period_start = ?`,
+    [typeId, periodStart],
+  );
   return row ? Number(row.total_days) : null;
 }
 
 /** 그 주기에 받은 일수를 넣거나 고친다. null이면 설정 자체를 지운다. */
-export function setGrant(typeId: number, periodStart: DateStr, total: number | null): void {
-  const type = getLeaveType(typeId);
+export async function setGrant(
+  typeId: number,
+  periodStart: DateStr,
+  total: number | null,
+): Promise<void> {
+  const type = await getLeaveType(typeId);
   if (!type) throw new ValidationError("휴가 종류를 찾을 수 없습니다.");
   if (!isValidDateStr(periodStart)) throw new ValidationError("주기 시작일이 올바르지 않습니다.");
 
-  const db = getDb();
   if (total === null) {
-    db.prepare(`DELETE FROM leave_grants WHERE type_id = ? AND period_start = ?`).run(
+    await run(`DELETE FROM leave_grants WHERE type_id = ? AND period_start = ?`, [
       typeId,
       periodStart,
-    );
+    ]);
     return;
   }
 
@@ -220,10 +219,11 @@ export function setGrant(typeId: number, periodStart: DateStr, total: number | n
     throw new ValidationError(`${type.name}${topicParticle(type.name)} ${type.minUnit}일 단위로 넣어 주세요.`);
   }
 
-  db.prepare(
+  await run(
     `INSERT INTO leave_grants (type_id, period_start, total_days) VALUES (?, ?, ?)
      ON CONFLICT(type_id, period_start) DO UPDATE SET total_days = excluded.total_days`,
-  ).run(typeId, periodStart, n);
+    [typeId, periodStart, n],
+  );
 }
 
 /* ── 사용량 ──────────────────────────────────────────────────────────── */
@@ -246,28 +246,27 @@ export function autoLeaveDays(from: DateStr, to: DateStr, holidays: Set<DateStr>
  * **주기 시작일이 그 주기 안에 있는 일정만** 센다. 연말에 걸친 휴가를 날짜별로 쪼개
  * 두 주기에 나눠 다는 건 회사 규정마다 달라, 임의로 정하면 오히려 틀린 숫자가 된다.
  */
-export function usedInPeriod(typeId: number, period: LeavePeriod, isDefault: boolean): number {
+export async function usedInPeriod(
+  typeId: number,
+  period: LeavePeriod,
+  isDefault: boolean,
+): Promise<number> {
   // leave_type_id가 비어 있는 옛 데이터는 기본 종류(연차)의 것으로 본다
   const where = isDefault
     ? `(leave_type_id = ? OR leave_type_id IS NULL)`
     : `leave_type_id = ?`;
 
-  const rows = getDb()
-    .prepare(
-      `SELECT date, end_date, leave_days FROM events
-       WHERE is_leave = 1 AND ${where} AND date BETWEEN ? AND ?`,
-    )
-    .all(typeId, period.start, period.end) as unknown as Array<{
-    date: DateStr;
-    end_date: DateStr;
-    leave_days: number | null;
-  }>;
+  const rows = await all<{ date: DateStr; end_date: DateStr; leave_days: number | null }>(
+    `SELECT date, end_date, leave_days FROM events
+     WHERE is_leave = 1 AND ${where} AND date BETWEEN ? AND ?`,
+    [typeId, period.start, period.end],
+  );
 
   if (rows.length === 0) return 0;
 
   // 공휴일은 한 번만 읽는다. 일정이 주기 밖으로 이어질 수 있어 넉넉히 잡는다.
   const holidays = new Set(
-    listHolidays(addDays(period.start, -40), addDays(period.end, 40)).map((h) => h.date),
+    (await listHolidays(addDays(period.start, -40), addDays(period.end, 40))).map((h) => h.date),
   );
 
   let used = 0;
@@ -283,10 +282,10 @@ export function usedInPeriod(typeId: number, period: LeavePeriod, isDefault: boo
 
 /* ── 요약 ────────────────────────────────────────────────────────────── */
 
-export function summarize(type: LeaveType, on: DateStr = today()): LeaveSummary {
+export async function summarize(type: LeaveType, on: DateStr = today()): Promise<LeaveSummary> {
   const period = periodOf(type, on);
-  const total = getGrant(type.id, period.start);
-  const used = usedInPeriod(type.id, period, type.sortOrder === 0);
+  const total = await getGrant(type.id, period.start);
+  const used = await usedInPeriod(type.id, period, type.sortOrder === 0);
 
   // 소멸까지 남은 날. eachDay를 쓰지 않고 문자열 비교로 끝낸다 (주기가 1년이라 366칸이 될 수 있다)
   const daysLeft = Math.max(
@@ -307,8 +306,9 @@ export function summarize(type: LeaveType, on: DateStr = today()): LeaveSummary 
 }
 
 /** 모든 종류의 요약. 화면은 이걸로 헤더와 팝업을 함께 그린다. */
-export function leaveSummaries(on: DateStr = today()): LeaveSummary[] {
-  return listLeaveTypes().map((t) => summarize(t, on));
+export async function leaveSummaries(on: DateStr = today()): Promise<LeaveSummary[]> {
+  const types = await listLeaveTypes();
+  return Promise.all(types.map((t) => summarize(t, on)));
 }
 
 /**

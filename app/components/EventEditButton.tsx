@@ -19,12 +19,15 @@ function toValues(event: Event): EventFieldValues {
     color: event.color,
     // 반복은 만들 때만 정한다. 여기서는 쓰지 않지만 타입을 맞추려고 둔다.
     repeatFreq: "",
+    repeatMode: "count",
     repeatCount: "1",
+    repeatUntil: "",
     isLeave: event.isLeave,
     leaveTypeId: event.leaveTypeId === null ? "" : String(event.leaveTypeId),
     // null은 '자동'이라 칸을 비워 둔다. 자동값을 적어 넣으면 직접 입력으로 굳어 버려서
     // 나중에 날짜를 옮겨도 옛 숫자가 따라다닌다.
     leaveDays: event.leaveDays === null ? "" : String(event.leaveDays),
+    reminderMinutes: event.reminderMinutes === null ? "" : String(event.reminderMinutes),
   };
 }
 
@@ -77,6 +80,7 @@ export default function EventEditButton({
           isLeave: values.isLeave,
           leaveTypeId: values.leaveTypeId ? Number(values.leaveTypeId) : null,
           leaveDays: values.leaveDays === "" ? null : Number(values.leaveDays),
+          reminderMinutes: values.reminderMinutes === "" ? null : Number(values.reminderMinutes),
         }),
       });
 

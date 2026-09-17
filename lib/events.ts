@@ -1,6 +1,7 @@
-import { getDb } from "./db";
+import { all, get, run, batch } from "./db";
 import { addDays, diffDays, eachDay, isValidDateStr, minutesOf, type DateStr } from "./date";
 import { isEventColorKey } from "./eventColors";
+import { REMINDER_THRESHOLD_OPTIONS } from "./settings";
 
 export type EventRow = {
   id: number;
@@ -18,6 +19,7 @@ export type EventRow = {
   leave_days: number | null;
   google_id: string;
   import_batch_id: number | null;
+  reminder_minutes: number | null;
   created_at: string;
   /** 준비물 개수 — 표에 있는 열이 아니라 SELECT가 세어 붙이는 값이다 */
   tasks_total?: number;
@@ -62,6 +64,11 @@ export type Event = {
   googleId: string;
   /** 한 번의 가져오기로 들어왔으면 그 번호. 통째로 되돌릴 때 쓴다 */
   importBatchId: number | null;
+  /**
+   * 이 일정만 몇 분 전에 알릴지(설치본 알림 전용). null이면 헤더의 전역
+   * '알림 시점' 설정(`lib/settings.ts`의 `getReminderThresholds`)을 그대로 따른다.
+   */
+  reminderMinutes: number | null;
   createdAt: string;
   /** 딸린 준비물 개수. 목록에 `준비물 2/5`를 적는 데 쓴다 */
   tasksTotal: number;
@@ -93,6 +100,10 @@ function toEvent(r: EventRow): Event {
       r.import_batch_id === null || r.import_batch_id === undefined
         ? null
         : Number(r.import_batch_id),
+    reminderMinutes:
+      r.reminder_minutes === null || r.reminder_minutes === undefined
+        ? null
+        : Number(r.reminder_minutes),
     createdAt: r.created_at,
     tasksTotal: r.tasks_total ?? 0,
     tasksDone: r.tasks_done ?? 0,
@@ -114,31 +125,31 @@ const SELECT = `
     (SELECT COUNT(*) FROM event_tasks t WHERE t.event_id = e.id AND t.done = 1) AS tasks_done
   FROM events e`;
 
-export function listEvents(): Event[] {
-  const rows = getDb().prepare(`${SELECT} ${ORDER}`).all() as unknown as EventRow[];
+export async function listEvents(): Promise<Event[]> {
+  const rows = await all<EventRow>(`${SELECT} ${ORDER}`);
   return rows.map(toEvent);
 }
 
 /** 그 날에 걸쳐 있는 일정 — 시작일이 그 날인 것만이 아니라 기간에 포함되면 나온다 */
-export function listEventsByDate(date: DateStr): Event[] {
-  const rows = getDb()
-    .prepare(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`)
-    .all(date, date) as unknown as EventRow[];
+export async function listEventsByDate(date: DateStr): Promise<Event[]> {
+  const rows = await all<EventRow>(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`, [
+    date,
+    date,
+  ]);
   return rows.map(toEvent);
 }
 
 /** [from, to]와 하루라도 겹치는 일정 */
-export function listEventsBetween(from: DateStr, to: DateStr): Event[] {
-  const rows = getDb()
-    .prepare(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`)
-    .all(to, from) as unknown as EventRow[];
+export async function listEventsBetween(from: DateStr, to: DateStr): Promise<Event[]> {
+  const rows = await all<EventRow>(`${SELECT} WHERE date <= ? AND end_date >= ? ${ORDER}`, [
+    to,
+    from,
+  ]);
   return rows.map(toEvent);
 }
 
-export function getEvent(id: number): Event | null {
-  const row = getDb().prepare(`${SELECT} WHERE e.id = ?`).get(id) as
-    | unknown as EventRow
-    | undefined;
+export async function getEvent(id: number): Promise<Event | null> {
+  const row = await get<EventRow>(`${SELECT} WHERE e.id = ?`, [id]);
   return row ? toEvent(row) : null;
 }
 
@@ -151,8 +162,11 @@ export type CreateInput = {
   endTime?: string | null;
   memo?: string;
   color?: string | null;
-  /** 반복. 없으면 한 건만 만든다 */
-  repeat?: { freq: RepeatFreq; count: number } | null;
+  /**
+   * 반복. 없으면 한 건만 만든다. 횟수(count) 또는 종료일(until) 중 하나로 정한다 —
+   * "몇 월 며칠까지 반복"을 고를 수 있게 둘 다 받는다.
+   */
+  repeat?: { freq: RepeatFreq; count: number } | { freq: RepeatFreq; until: DateStr } | null;
   /**
    * 반복 묶음 id를 직접 지정한다. `.ics` 가져오기 전용이다 —
    * 내보낼 때 적어 둔 묶음을 그대로 되살려야 '반복 전체 삭제'가 계속 동작한다.
@@ -170,6 +184,11 @@ export type CreateInput = {
    * 내보낸 파일을 다시 넣었을 때 완료 표시가 풀려 버리면 백업이 아니다.
    */
   done?: boolean;
+  /**
+   * 이 일정만 몇 분 전에 알릴지. 비우면(null/undefined) 전역 설정을 따른다.
+   * `lib/settings.ts`의 `REMINDER_THRESHOLD_OPTIONS`에 있는 값만 받는다.
+   */
+  reminderMinutes?: number | null;
   /**
    * 구글 캘린더 원본 id. **동기화 전용**이다 — 화면에서 만들 때는 비운다.
    * 값이 있으면 그 일정은 구글이 주인이라, 다음 동기화 때 이쪽 수정이 덮인다.
@@ -202,6 +221,24 @@ function normalizeColor(v: unknown): string {
   if (v === undefined || v === null || v === "") return "";
   if (!isEventColorKey(v)) throw new ValidationError("색이 올바르지 않습니다.");
   return v as string;
+}
+
+/**
+ * 비어 있으면 null(= 전역 알림 설정을 따름). -1이면 이 일정은 시작 시 알림만 —
+ * 0이면 이 일정만 알림을 아예 끈 것 —
+ * 전역 설정과 무관하게 이 일정에는 알림을 보내지 않는다. 그 외엔 정해진
+ * 선택지(15/30/60/120분)만 받는다.
+ */
+function normalizeReminderMinutes(v: unknown): number | null {
+  if (v === undefined || v === null) return null;
+  const n = Number(v);
+  if (n === -1) return -1;
+  if (n === 0) return 0;
+  const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
+  if (!options.includes(n)) {
+    throw new ValidationError(`알림 시점은 -1(시작 시), 0(끄기) 또는 ${REMINDER_THRESHOLD_OPTIONS.join("/")}분 전 중 하나여야 합니다.`);
+  }
+  return n;
 }
 
 /**
@@ -241,32 +278,52 @@ function normalizeEndDate(v: unknown, start: DateStr): DateStr {
  *
  * 매월·매년은 **같은 날짜**를 지킨다. 그 달에 없는 날(1/31 → 2월)은 만들지 않고 건너뛴다 —
  * 말없이 2/28로 당겨 놓으면 사용자가 넣은 적 없는 날짜가 생긴다.
+ *
+ * `count`(횟수)와 `until`(종료일) 중 하나로 언제까지 반복할지 정한다. `until`일 때는
+ * MAX_REPEAT_COUNT를 넘어가는 순간 예외를 던진다 — 종료일이 너무 멀어서 조용히
+ * 잘리면 사용자가 고른 날짜와 실제로 생긴 마지막 회차가 어긋난다.
  */
-function repeatDates(start: DateStr, freq: RepeatFreq, count: number): DateStr[] {
+export function repeatDates(
+  start: DateStr,
+  freq: RepeatFreq,
+  spec: { count: number } | { until: DateStr },
+): DateStr[] {
   const out: DateStr[] = [];
   const y = Number(start.slice(0, 4));
   const m = Number(start.slice(5, 7));
   const d = Number(start.slice(8, 10));
+  const until = "until" in spec ? spec.until : null;
+  // count 모드는 그 횟수만큼만 돈다. until 모드는 상한(+1)까지 돌며 넘치는지 확인한다.
+  const iterations = "count" in spec ? spec.count : MAX_REPEAT_COUNT + 1;
 
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < iterations; i++) {
+    let date: DateStr | null;
     if (freq === "weekly") {
-      out.push(addDays(start, i * 7));
-      continue;
+      date = addDays(start, i * 7);
+    } else {
+      const at =
+        freq === "monthly"
+          ? new Date(Date.UTC(y, m - 1 + i, d))
+          : new Date(Date.UTC(y + i, m - 1, d));
+      // 넘긴 날짜가 그대로 살아 있는지 확인한다 (2월 31일은 3월로 밀려나므로 버린다)
+      date = at.getUTCDate() === d ? at.toISOString().slice(0, 10) : null;
     }
-
-    const at =
-      freq === "monthly"
-        ? new Date(Date.UTC(y, m - 1 + i, d))
-        : new Date(Date.UTC(y + i, m - 1, d));
-
-    // 넘긴 날짜가 그대로 살아 있는지 확인한다 (2월 31일은 3월로 밀려나므로 버린다)
-    if (at.getUTCDate() === d) out.push(at.toISOString().slice(0, 10));
+    if (date === null) continue;
+    if (until !== null) {
+      if (date > until) break;
+      if (out.length >= MAX_REPEAT_COUNT) {
+        throw new ValidationError(
+          `반복 종료일까지 ${MAX_REPEAT_COUNT}회를 넘습니다 — 종료일을 당겨 주세요.`,
+        );
+      }
+    }
+    out.push(date);
   }
 
   return out;
 }
 
-export function createEvent(input: CreateInput): Event {
+export async function createEvent(input: CreateInput): Promise<Event> {
   const title = typeof input.title === "string" ? input.title.trim() : "";
   if (!title) throw new ValidationError("제목을 입력해 주세요.");
   if (!isValidDateStr(input.date)) throw new ValidationError("날짜는 'YYYY-MM-DD' 형식이어야 합니다.");
@@ -283,6 +340,7 @@ export function createEvent(input: CreateInput): Event {
   }
   const memo = typeof input.memo === "string" ? input.memo.trim() : "";
   const color = normalizeColor(input.color);
+  const reminderMinutes = normalizeReminderMinutes(input.reminderMinutes);
   const isLeave = Boolean(input.isLeave);
   // 연차가 아니면 종류도 뜻이 없다
   const leaveTypeId = isLeave && input.leaveTypeId ? Number(input.leaveTypeId) : null;
@@ -293,8 +351,11 @@ export function createEvent(input: CreateInput): Event {
   // 그래야 달력·busyDates·수정·삭제가 하나짜리 일정과 똑같이 동작한다.
   const repeat = normalizeRepeat(input.repeat);
   const starts = repeat
-    ? repeatDates(input.date, repeat.freq, repeat.count)
+    ? repeatDates(input.date, repeat.freq, "until" in repeat ? { until: repeat.until } : { count: repeat.count })
     : [input.date as DateStr];
+  if (repeat && starts.length === 0) {
+    throw new ValidationError("반복 종료일이 시작일보다 빠릅니다.");
+  }
   // 가져오기가 넘겨 준 묶음 id가 있으면 그대로 쓴다 (백업 복원). 없으면 반복이 새로 만든다.
   const seriesId =
     typeof input.seriesId === "string" && input.seriesId
@@ -306,41 +367,53 @@ export function createEvent(input: CreateInput): Event {
   // 기간(일수)은 회차마다 그대로 유지한다
   const span = diffDays(input.date, endDate);
 
-  const insert = getDb().prepare(
-    `INSERT INTO events (title, date, end_date, start_time, end_time, memo, color, series_id, is_leave, leave_type_id, leave_days, done, google_id, import_batch_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  const sql = `INSERT INTO events (title, date, end_date, start_time, end_time, memo, color, series_id, is_leave, leave_type_id, leave_days, done, google_id, import_batch_id, reminder_minutes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+  // 반복 일정은 회차가 60개까지 나온다. 하나씩 await하면 원격 DB에서 왕복이 60번이라
+  // '한 번 추가'가 눈에 보이게 느려진다. 한 트랜잭션으로 묶어 한 번에 보낸다.
+  const results = await batch(
+    starts.map((start) => ({
+      sql,
+      args: [
+        title,
+        start,
+        addDays(start, span),
+        startTime,
+        endTime,
+        memo,
+        color,
+        seriesId,
+        isLeave ? 1 : 0,
+        leaveTypeId,
+        leaveDays,
+        input.done ? 1 : 0,
+        typeof input.googleId === "string" ? input.googleId : "",
+        typeof input.importBatchId === "number" ? input.importBatchId : null,
+        reminderMinutes,
+      ],
+    })),
   );
 
-  let firstId = 0;
-  for (const start of starts) {
-    const { lastInsertRowid } = insert.run(
-      title,
-      start,
-      addDays(start, span),
-      startTime,
-      endTime,
-      memo,
-      color,
-      seriesId,
-      isLeave ? 1 : 0,
-      leaveTypeId,
-      leaveDays,
-      input.done ? 1 : 0,
-      typeof input.googleId === "string" ? input.googleId : "",
-      typeof input.importBatchId === "number" ? input.importBatchId : null
-    );
-    if (!firstId) firstId = Number(lastInsertRowid);
-  }
-
-  return getEvent(firstId)!;
+  const first = results[0]?.lastInsertRowid;
+  const firstId = first === undefined ? 0 : Number(first);
+  return (await getEvent(firstId))!;
 }
 
-function normalizeRepeat(v: CreateInput["repeat"]): { freq: RepeatFreq; count: number } | null {
+function normalizeRepeat(
+  v: CreateInput["repeat"],
+): { freq: RepeatFreq; count: number } | { freq: RepeatFreq; until: DateStr } | null {
   if (!v) return null;
   if (!["weekly", "monthly", "yearly"].includes(v.freq)) {
     throw new ValidationError("반복 주기가 올바르지 않습니다.");
   }
-  const count = Math.trunc(Number(v.count));
+  if ("until" in v && v.until) {
+    if (!isValidDateStr(v.until)) {
+      throw new ValidationError("반복 종료일은 'YYYY-MM-DD' 형식이어야 합니다.");
+    }
+    return { freq: v.freq, until: v.until };
+  }
+  const count = Math.trunc(Number((v as { count: number }).count));
   if (!Number.isFinite(count) || count < 1 || count > MAX_REPEAT_COUNT) {
     throw new ValidationError(`반복 횟수는 1~${MAX_REPEAT_COUNT} 사이여야 합니다.`);
   }
@@ -353,28 +426,27 @@ function normalizeRepeat(v: CreateInput["repeat"]): { freq: RepeatFreq; count: n
  * 제목·시작일·종료일·시작시각이 모두 같으면 같은 일정으로 본다. 메모나 색까지 보면
  * 남의 캘린더에서 받은 파일을 다시 받을 때 사소한 차이로 중복이 생긴다.
  */
-export function eventExists(input: {
+export async function eventExists(input: {
   title: string;
   date: DateStr;
   endDate: DateStr;
   startTime: string | null;
-}): boolean {
-  const row = getDb()
-    .prepare(
-      // start_time에는 NULL(하루 종일)이 들어가므로 =가 아니라 IS로 비교한다
-      `SELECT 1 FROM events
-       WHERE title = ? AND date = ? AND end_date = ? AND start_time IS ?
-       LIMIT 1`
-    )
-    .get(input.title, input.date, input.endDate, input.startTime);
+}): Promise<boolean> {
+  const row = await get(
+    // start_time에는 NULL(하루 종일)이 들어가므로 =가 아니라 IS로 비교한다
+    `SELECT 1 FROM events
+     WHERE title = ? AND date = ? AND end_date = ? AND start_time IS ?
+     LIMIT 1`,
+    [input.title, input.date, input.endDate, input.startTime],
+  );
   return row !== undefined;
 }
 
 /** 같은 반복 묶음 전체를 지운다. 지운 개수를 돌려준다. */
-export function deleteSeries(seriesId: string): number {
+export async function deleteSeries(seriesId: string): Promise<number> {
   if (!seriesId) return 0;
-  const { changes } = getDb().prepare(`DELETE FROM events WHERE series_id = ?`).run(seriesId);
-  return Number(changes);
+  const { rowsAffected } = await run(`DELETE FROM events WHERE series_id = ?`, [seriesId]);
+  return rowsAffected;
 }
 
 export type UpdateInput = Partial<{
@@ -389,11 +461,12 @@ export type UpdateInput = Partial<{
   leaveTypeId: number | null;
   leaveDays: number | null;
   done: boolean;
+  reminderMinutes: number | null;
 }>;
 
 /** 전달된 필드만 갱신한다 (완료 토글도 이 함수로 처리). */
-export function updateEvent(id: number, patch: UpdateInput): Event | null {
-  const current = getEvent(id);
+export async function updateEvent(id: number, patch: UpdateInput): Promise<Event | null> {
+  const current = await getEvent(id);
   if (!current) return null;
 
   const sets: string[] = [];
@@ -476,6 +549,10 @@ export function updateEvent(id: number, patch: UpdateInput): Event | null {
     sets.push("color = ?");
     values.push(normalizeColor(patch.color));
   }
+  if (patch.reminderMinutes !== undefined) {
+    sets.push("reminder_minutes = ?");
+    values.push(normalizeReminderMinutes(patch.reminderMinutes));
+  }
   if (patch.memo !== undefined) {
     sets.push("memo = ?");
     values.push(typeof patch.memo === "string" ? patch.memo.trim() : "");
@@ -505,13 +582,13 @@ export function updateEvent(id: number, patch: UpdateInput): Event | null {
   if (sets.length === 0) throw new ValidationError("변경할 항목이 없습니다.");
 
   values.push(id);
-  getDb().prepare(`UPDATE events SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+  await run(`UPDATE events SET ${sets.join(", ")} WHERE id = ?`, values);
   return getEvent(id);
 }
 
-export function deleteEvent(id: number): boolean {
-  const { changes } = getDb().prepare(`DELETE FROM events WHERE id = ?`).run(id);
-  return Number(changes) > 0;
+export async function deleteEvent(id: number): Promise<boolean> {
+  const { rowsAffected } = await run(`DELETE FROM events WHERE id = ?`, [id]);
+  return rowsAffected > 0;
 }
 
 /**
@@ -529,16 +606,15 @@ export function deleteEvent(id: number): boolean {
  *
  * 남는 것은 "단발로 잡힌 하루 종일 일정" — 출장·경조사처럼 정말 그 날을 못 비우는 것들이다.
  */
-export function busyDates(from: DateStr, to: DateStr): DateStr[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT date, end_date FROM events
-       WHERE done = 0
-         AND start_time IS NULL
-         AND series_id = ''
-         AND date <= ? AND end_date >= ?`
-    )
-    .all(to, from) as unknown as Array<{ date: DateStr; end_date: DateStr }>;
+export async function busyDates(from: DateStr, to: DateStr): Promise<DateStr[]> {
+  const rows = await all<{ date: DateStr; end_date: DateStr }>(
+    `SELECT date, end_date FROM events
+     WHERE done = 0
+       AND start_time IS NULL
+       AND series_id = ''
+       AND date <= ? AND end_date >= ?`,
+    [to, from],
+  );
 
   // 여러 날짜에 걸친 일정은 그 사이 날이 전부 막힌다
   const out = new Set<DateStr>();
@@ -563,7 +639,7 @@ export type SearchResult = {
   hasMore: boolean;
 };
 
-export function searchEvents(query: string, limit = 30): SearchResult {
+export async function searchEvents(query: string, limit = 30): Promise<SearchResult> {
   const q = query.trim();
   if (!q) return { events: [], hasMore: false };
 
@@ -577,14 +653,13 @@ export function searchEvents(query: string, limit = 30): SearchResult {
   // idx_events_date를 역주행하며 필요한 행만 채우고 조기 종료한다.
   // 5만 행에서 실측: LIMIT 31이 1.26ms, 같은 조건의 COUNT(*)가 5.08ms.
   // 정확한 숫자를 보여 주려고 매 검색을 전량 스캔으로 바꾸는 건 남는 장사가 아니다.
-  const rows = getDb()
-    .prepare(
-      `${SELECT}
-       WHERE title LIKE ? ESCAPE '\\' OR memo LIKE ? ESCAPE '\\'
-       ORDER BY date DESC, e.id DESC
-       LIMIT ?`
-    )
-    .all(like, like, limit + 1) as unknown as EventRow[];
+  const rows = await all<EventRow>(
+    `${SELECT}
+     WHERE title LIKE ? ESCAPE '\\' OR memo LIKE ? ESCAPE '\\'
+     ORDER BY date DESC, e.id DESC
+     LIMIT ?`,
+    [like, like, limit + 1],
+  );
 
   return {
     events: rows.slice(0, limit).map(toEvent),

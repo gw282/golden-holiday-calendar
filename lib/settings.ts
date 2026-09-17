@@ -1,4 +1,5 @@
-import { getDb } from "./db";
+import { get, run } from "./db";
+import type { WeekStart } from "./date";
 
 /**
  * 앱 설정 — 지금은 **오프라인 모드** 하나뿐이다.
@@ -13,10 +14,12 @@ import { getDb } from "./db";
  */
 
 /** 오프라인 모드인가 */
-export function isOffline(): boolean {
-  const row = getDb().prepare(`SELECT value FROM app_settings WHERE key = 'offline'`).get() as
-    | { value: string }
-    | undefined;
+export async function isOffline(): Promise<boolean> {
+  if (process.env.OFFLINE_DEFAULT === "1") return true;
+
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'offline'`,
+  );
 
   // 아직 아무도 손대지 않았으면 환경변수가 기본값을 정한다.
   // 오프라인용 빌드는 OFFLINE_DEFAULT=1로 띄우면 처음부터 꺼진 채로 시작한다.
@@ -24,11 +27,190 @@ export function isOffline(): boolean {
   return row.value === "1";
 }
 
-export function setOffline(on: boolean): void {
-  getDb()
-    .prepare(
-      `INSERT INTO app_settings (key, value) VALUES ('offline', ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    )
-    .run(on ? "1" : "0");
+/**
+ * 챗봇을 쓸 수 있나 — `CHAT_DISABLED=1`이면 끈다.
+ *
+ * 오프라인 모드와 **따로 두는 이유**가 있다. 오프라인은 밖으로 나가는 것 전부
+ * (항공권·숙소·환율·구글 캘린더)를 같이 끄는 스위치다. 인터넷에 올린 배포본은 그것들을
+ * 다 쓰고 싶은데 챗봇만 빼고 싶다 — 챗봇이 끌고 오는 비용이 나머지와 급이 다르기 때문이다:
+ * Claude Code 실행 파일이 215MB이고, 자식 프로세스로 뜨느라 RAM을 요구하며,
+ * `ANTHROPIC_API_KEY`를 서버에 둬야 해서 **요금이 서버를 띄운 계정에 붙는다.**
+ *
+ * DB가 아니라 환경변수인 이유: 이건 사용자가 바꿀 취향이 아니라 **그 배포본의 성질**이다.
+ * 바이너리를 안 담고 올린 이미지에서 화면의 토글로 켤 수 있으면 켜자마자 고장 난다.
+ */
+export function isChatEnabled(): boolean {
+  return process.env.CHAT_DISABLED !== "1";
+}
+
+/**
+ * 데스크톱 설치본(Tauri/Electron)인가 — 그 안의 Node 서버를 띄울 때 심어 준
+ * `DESKTOP_APP=1`로 판단한다.
+ *
+ * 오프라인 배지를 숨기는 데만 쓴다. 설치본은 애초에 켜고 끌 수 없는 고정값이라
+ * "오프라인"이라고 계속 적어 두면 뭔가 빠진 것처럼 보인다 — 반면 사내망에 호스팅한
+ * 배포본(`OFFLINE_DEFAULT=1`이지만 웹 브라우저로 접속)은 계속 밝혀 두는 게 맞다.
+ */
+export function isDesktopApp(): boolean {
+  return process.env.DESKTOP_APP === "1";
+}
+
+export async function setOffline(on: boolean): Promise<void> {
+  if (process.env.OFFLINE_DEFAULT === "1") return;
+
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('offline', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}
+
+/**
+ * 황금연휴를 볼 것인가 — 기본은 켜짐. 연차 계획을 이미 다 세운 사람에게는
+ * 매번 계산해 보여주는 추천이 그냥 화면을 차지하는 것일 수 있어 끌 수 있게 둔다.
+ * 꺼 두면 page.tsx가 계산 자체를 건너뛴다(감추기만 하는 게 아니라).
+ */
+export async function isRecommendationEnabled(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'recommendations'`,
+  );
+  return row ? row.value === "1" : true;
+}
+
+export async function setRecommendationEnabled(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('recommendations', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}
+
+/** 고를 수 있는 알림 시점(분 전). 화면 체크박스도, Rust 쪽 검증도 이 목록만 믿는다 */
+export const REMINDER_THRESHOLD_OPTIONS = [15, 30, 60, 120] as const;
+const DEFAULT_REMINDER_THRESHOLDS = [60, 15];
+
+/**
+ * 일정 시작 몇 분 전에 윈도우 알림을 줄지 — 설치본의 Rust 백그라운드 스레드
+ * (`src-tauri/src/lib.rs`의 `run_notifier`)가 30초마다 `/api/settings`를 같이 읽어
+ * 이 목록을 그대로 쓴다. 여기서 바뀌면 앱 재시작 없이 다음 폴링부터 반영된다.
+ */
+export async function getReminderThresholds(): Promise<number[]> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'reminderThresholds'`,
+  );
+  if (!row) return DEFAULT_REMINDER_THRESHOLDS;
+  try {
+    const parsed = JSON.parse(row.value);
+    const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
+    const valid = Array.isArray(parsed) ? parsed.filter((n) => options.includes(n)) : [];
+    return valid.length > 0 ? valid : DEFAULT_REMINDER_THRESHOLDS;
+  } catch {
+    return DEFAULT_REMINDER_THRESHOLDS;
+  }
+}
+
+export async function setReminderThresholds(minutes: number[]): Promise<void> {
+  const options: readonly number[] = REMINDER_THRESHOLD_OPTIONS;
+  const valid = minutes.filter((n) => options.includes(n));
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('reminderThresholds', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [JSON.stringify(valid)],
+  );
+}
+
+/** 일정 시작 시각에 즉시 알림을 보낼 것인가 — 기본 전역 설정은 켜짐 */
+export async function isStartTimeReminderEnabled(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'startTimeReminder'`,
+  );
+  return row ? row.value === "1" : true;
+}
+
+export async function setStartTimeReminderEnabled(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('startTimeReminder', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}
+
+export async function requestNotificationTest(): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('notificationTest', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [String(Date.now())],
+  );
+}
+
+export async function getNotificationTest(): Promise<string> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'notificationTest'`,
+  );
+  return row?.value ?? "";
+}
+
+/**
+ * 정각마다 알림을 줄 것인가 — 기본은 꺼짐. 50분(창이 보이는 시간 기준) 스트레칭
+ * 알림과는 별개다 — 그쪽은 "일한 지 얼마나 됐는지", 이쪽은 "지금 몇 시인지"를 알리는
+ * 용도라 둘 다 켜 둘 수 있다. Rust 쪽(`run_notifier`)이 30초마다 이 값을 같이 읽는다.
+ */
+export async function isHourlyChimeEnabled(): Promise<boolean> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'hourlyChime'`,
+  );
+  return row ? row.value === "1" : false;
+}
+
+export async function setHourlyChimeEnabled(on: boolean): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('hourlyChime', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [on ? "1" : "0"],
+  );
+}
+
+/**
+ * 정각 알림의 기준 시각 — "09:00"이면 09:00·10:00·11:00…마다 울린다.
+ * 원래는 **앱을 켠 시점부터 1시간마다**였는데, 그러면 언제 껐다 켰느냐에 따라
+ * 매번 다른 분(分)에 울려 예측할 수 없었다. 기준 시각의 "분"만 실제로 쓰인다
+ * (`run_notifier`가 매 시 그 분에 울리는지를 본다) — 시(時)는 그냥 기본값 표시용이다.
+ */
+export async function getHourlyChimeAnchor(): Promise<string> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'hourlyChimeAnchor'`,
+  );
+  return row?.value && /^([01]\d|2[0-3]):[0-5]\d$/.test(row.value) ? row.value : "09:00";
+}
+
+export async function setHourlyChimeAnchor(value: string): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('hourlyChimeAnchor', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [value],
+  );
+}
+
+/**
+ * 한 주가 월요일에 시작하는지 일요일에 시작하는지 — 기본은 월요일.
+ *
+ * `weekNum`·`zoom`·`theme`처럼 localStorage 첫 페인트 스크립트로 두지 **않은** 이유가
+ * 있다. 그 셋은 CSS 속성 하나만 바꾸는 순수 화면 취향이라 서버가 몰라도 된다.
+ * 이건 다르다 — `lib/calendar.ts`의 `buildMonth`가 주(week) 배열 자체를 이 값
+ * 기준으로 다시 짜고, 기간 일정 띠(band)의 칸 위치도 그 배열 순서로 계산한다.
+ * 서버가 값을 모르면 그릴 수 없는 값이라 DB에 둔다(`offline`과 같은 이유).
+ */
+export async function getWeekStart(): Promise<WeekStart> {
+  const row = await get<{ value: string }>(
+    `SELECT value FROM app_settings WHERE key = 'weekStart'`,
+  );
+  return row?.value === "sun" ? "sun" : "mon";
+}
+
+export async function setWeekStart(value: WeekStart): Promise<void> {
+  await run(
+    `INSERT INTO app_settings (key, value) VALUES ('weekStart', ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [value],
+  );
 }

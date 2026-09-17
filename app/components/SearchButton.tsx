@@ -100,7 +100,7 @@ export default function SearchButton() {
         {results !== null && (
           <>
             <p className="px-4 pt-3 text-xs text-muted">{results.length}건</p>
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[calc(60vh/var(--app-zoom,1))] overflow-y-auto">
               <EventList events={results} emptyText="찾는 일정이 없습니다." />
             </div>
           </>

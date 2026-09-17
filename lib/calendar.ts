@@ -1,6 +1,9 @@
-import { getDb } from "./db";
+import { all, get } from "./db";
 import { isMultiDay, listEventsBetween, type Event } from "./events";
 import type { Holiday } from "./holidays";
+import { lunarInRange } from "./lunar";
+import { milestonesInRange, type Milestone } from "./milestones";
+import { solarTermsInRange } from "./solarTerms";
 import {
   addDays,
   addMonths,
@@ -12,6 +15,7 @@ import {
   today,
   type DateStr,
   type MonthStr,
+  type WeekStart,
 } from "./date";
 
 /**
@@ -22,21 +26,22 @@ import {
  * 순환 참조가 되기 때문에 이 파일에 모아 둔다. `lib/bridge.ts`도 여기서 가져다 쓴다.
  */
 /**
- * `node:sqlite`가 주는 행은 **프로토타입이 null인 객체**다. 그대로 Server Component에서
+ * libSQL이 주는 행은 이름과 번호로 둘 다 접근되는 **평범하지 않은 객체**다. 그대로 Server Component에서
  * Client Component로 넘기면 "Only plain objects ... can be passed"로 500이 난다.
  * 그래서 여기서 평범한 객체 리터럴로 바꿔 담는다 (`lib/events.ts`의 toEvent와 같은 이유).
  */
 type HolidayRow = { date: DateStr; name: string; kind: Holiday["kind"] };
 
-export function listHolidays(from: DateStr, to: DateStr): Holiday[] {
-  const rows = getDb()
-    .prepare(`SELECT date, name, kind FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date`)
-    .all(from, to) as unknown as HolidayRow[];
+export async function listHolidays(from: DateStr, to: DateStr): Promise<Holiday[]> {
+  const rows = await all<HolidayRow>(
+    `SELECT date, name, kind FROM holidays WHERE date BETWEEN ? AND ? ORDER BY date`,
+    [from, to],
+  );
   return rows.map((r) => ({ date: r.date, name: r.name, kind: r.kind }));
 }
 
-export function holidayMap(from: DateStr, to: DateStr): Map<DateStr, Holiday> {
-  return new Map(listHolidays(from, to).map((h) => [h.date, h]));
+export async function holidayMap(from: DateStr, to: DateStr): Promise<Map<DateStr, Holiday>> {
+  return new Map((await listHolidays(from, to)).map((h) => [h.date, h]));
 }
 
 /** 쉬는 날 = 주말 또는 공휴일 */
@@ -53,6 +58,12 @@ export type CalendarDay = {
   /** 0=일 … 6=토 */
   weekday: number;
   holiday: Holiday | null;
+  /** 사내 고정 마일스톤(급여일 등) — DB 이벤트가 아니라 순수 표시 전용이다 */
+  milestone: Milestone | null;
+  /** 24절기 이름. 태양 기준이라 매년 계산한다(`solarTerms.ts`) — 표시 전용, DB 미참조 */
+  solarTerm: string | null;
+  /** 음력 일자("15") 또는 초하루("8월 1일"). 매일 있는 값이라 null이 아니다 — 표시 전용, DB 미참조 */
+  lunar: string;
   events: Event[];
 };
 
@@ -60,7 +71,7 @@ export type CalendarMonth = {
   month: MonthStr;
   prevMonth: MonthStr;
   nextMonth: MonthStr;
-  /** 일요일 시작, 7일씩 4~6줄 */
+  /** weekStart 설정에 따라 월요일 또는 일요일 시작, 7일씩 4~6줄 */
   weeks: CalendarDay[][];
   /**
    * 여러 날에 걸친 일정. 칸마다 같은 제목을 반복해 넣지 않고 가로 띠로 그린다.
@@ -70,18 +81,24 @@ export type CalendarMonth = {
 };
 
 /** 한 달 그리드를 만든다. 일정·공휴일을 그리드 전체 범위로 한 번에 읽는다. */
-export function buildMonth(month: MonthStr): CalendarMonth {
+export async function buildMonth(
+  month: MonthStr,
+  weekStart: WeekStart = "mon",
+): Promise<CalendarMonth> {
   const first = monthStart(month);
   const last = monthEnd(month);
-  const gridStart = startOfWeek(first);
-  const gridEnd = addDays(startOfWeek(last), 6);
+  const gridStart = startOfWeek(first, weekStart);
+  const gridEnd = addDays(startOfWeek(last, weekStart), 6);
 
-  const holidays = holidayMap(gridStart, gridEnd);
+  const holidays = await holidayMap(gridStart, gridEnd);
+  const milestones = milestonesInRange(gridStart, gridEnd, new Set(holidays.keys()));
+  const solarTerms = solarTermsInRange(gridStart, gridEnd);
+  const lunarDates = lunarInRange(gridStart, gridEnd);
 
   const byDate = new Map<DateStr, Event[]>();
   const spanning: Event[] = [];
 
-  for (const e of listEventsBetween(gridStart, gridEnd)) {
+  for (const e of await listEventsBetween(gridStart, gridEnd)) {
     if (isMultiDay(e)) {
       spanning.push(e);
       continue;
@@ -105,6 +122,9 @@ export function buildMonth(month: MonthStr): CalendarMonth {
         isToday: cursor === t,
         weekday: dayOfWeek(cursor),
         holiday: holidays.get(cursor) ?? null,
+        milestone: milestones.get(cursor) ?? null,
+        solarTerm: solarTerms.get(cursor) ?? null,
+        lunar: lunarDates.get(cursor) ?? "",
         events: byDate.get(cursor) ?? [],
       });
       cursor = addDays(cursor, 1);
@@ -126,32 +146,36 @@ export function buildMonth(month: MonthStr): CalendarMonth {
  * 추천 기간을 여기까지로 잘라 두면, 데이터가 없는 해를 "공휴일이 하나도 없는 해"로
  * 착각해 훑는 낭비와 오해를 막을 수 있다.
  */
-export function holidayCoverage(): { from: DateStr; to: DateStr } | null {
-  const row = getDb()
-    .prepare(`SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM holidays`)
-    .get() as unknown as { min_date: string | null; max_date: string | null } | undefined;
+export async function holidayCoverage(): Promise<{ from: DateStr; to: DateStr } | null> {
+  const row = await get<{ min_date: string | null; max_date: string | null }>(
+    `SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM holidays`,
+  );
 
   return row?.min_date && row?.max_date ? { from: row.min_date, to: row.max_date } : null;
 }
 
 /** 그 날의 공휴일. 일정 목록에도 공휴일을 같이 보여 주려고 쓴다. */
-export function getHoliday(date: DateStr): Holiday | null {
-  const row = getDb()
-    .prepare(`SELECT date, name, kind FROM holidays WHERE date = ?`)
-    .get(date) as unknown as Holiday | undefined;
-  return row ?? null;
+export async function getHoliday(date: DateStr): Promise<Holiday | null> {
+  const row = await get<HolidayRow>(`SELECT date, name, kind FROM holidays WHERE date = ?`, [
+    date,
+  ]);
+  // 위 주석대로 **객체 리터럴로 다시 담아** 넘긴다. 이 값은 Client Component까지 간다.
+  return row ? { date: row.date, name: row.name, kind: row.kind } : null;
 }
 
 /**
  * 기준일 앞뒤로 가장 가까운 공휴일. 달을 하나씩 넘기며 찾을 필요 없이 바로 건너뛰라고 쓴다.
  * 기준일 자신은 제외한다 (같은 날에 머무르면 이동이 아니다).
  */
-export function adjacentHoliday(date: DateStr, direction: "prev" | "next"): Holiday | null {
+export async function adjacentHoliday(
+  date: DateStr,
+  direction: "prev" | "next",
+): Promise<Holiday | null> {
   const sql =
     direction === "next"
       ? `SELECT date, name, kind FROM holidays WHERE date > ? ORDER BY date ASC LIMIT 1`
       : `SELECT date, name, kind FROM holidays WHERE date < ? ORDER BY date DESC LIMIT 1`;
 
-  const row = getDb().prepare(sql).get(date) as unknown as Holiday | undefined;
-  return row ?? null;
+  const row = await get<HolidayRow>(sql, [date]);
+  return row ? { date: row.date, name: row.name, kind: row.kind } : null;
 }
